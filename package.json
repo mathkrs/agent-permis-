@@ -1,0 +1,12 @@
+{
+  "name": "agent-permis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vérificateur automatique de disponibilité d'examen pratique de conduite (OCV Genève / Tradispo)",
+  "scripts": {
+    "check": "node src/checkAvailability.js"
+  },
+  "dependencies": {
+    "playwright": "^1.56.1"
+  }
+}
