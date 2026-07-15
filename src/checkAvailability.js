@@ -306,12 +306,32 @@ async function run() {
       process.exit(5);
     }
 
-    // Étape confirmée manuellement : depuis la page d'accueil "Rendez-vous
-    // d'examens", il faut cliquer sur le lien "Choisir" de la ligne
-    // Pratique/B pour arriver sur le calendrier hebdomadaire des créneaux
-    // (URL .../rendez-vous/chooseDate). On capture cette page pour l'instant
-    // sans encore savoir en parser précisément les créneaux — étape
-    // temporaire le temps d'obtenir le vrai HTML de cette page.
+    // Si un rendez-vous est déjà réservé, la page d'accueil affiche un
+    // tableau "Rendez-vous existants" à la place du lien "Choisir" (qui
+    // sert uniquement à en prendre un nouveau). Ce n'est pas une panne :
+    // on le signale simplement comme information, sans déclencher
+    // d'alerte ni de notification "nouvelle disponibilité" à chaque
+    // vérification.
+    const existingTable = page.locator('dw-rendez-vous-list table');
+    if ((await existingTable.count()) > 0) {
+      const rowText = await existingTable
+        .locator('tbody tr')
+        .first()
+        .innerText()
+        .catch(() => '');
+      result.ok = true;
+      result.available = false;
+      result.existingAppointment = rowText.replace(/\s+/g, ' ').trim();
+      result.debug = await dumpDebug(page, 'existing-appointment');
+      console.log(JSON.stringify(result));
+      await browser.close();
+      process.exit(0);
+    }
+
+    // Depuis la page d'accueil "Rendez-vous d'examens" (sans rendez-vous
+    // existant), il faut cliquer sur le lien "Choisir" de la ligne
+    // Pratique/B pour arriver sur le calendrier hebdomadaire des
+    // créneaux (URL .../rendez-vous/chooseDate).
     try {
       const choisirLink = page.getByText('Choisir', { exact: true });
       await choisirLink.first().waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
