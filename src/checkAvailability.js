@@ -111,6 +111,21 @@ async function dumpDebug(page, label) {
   return { png, html };
 }
 
+// Attend, en sondant régulièrement plutôt qu'avec une seule vérification
+// après networkidle (peu fiable : la validation backend peut prendre plus
+// de temps que ce que networkidle laisse deviner), que le sélecteur donné
+// ait disparu de la page — utilisé pour détecter une vraie sortie de
+// l'écran de login sans dépendre d'un minutage fixe.
+async function waitUntilGone(page, selector, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const count = await page.locator(selector).count().catch(() => 0);
+    if (count === 0) return true;
+    await page.waitForTimeout(400);
+  }
+  return false;
+}
+
 // Remplit un champ à "masque de saisie" (PrimeNG p-inputmask) : .fill()
 // contourne le gestionnaire de touches du masque et laisse le champ vide
 // ou invalide, donc on tape les chiffres un par un pour laisser le masque
@@ -232,13 +247,12 @@ async function run() {
       process.exit(4);
     }
 
-    // Vérification fiable : si le bouton "Login" du formulaire est
-    // toujours présent dans la page, on n'a pas réellement quitté l'écran
-    // de connexion (contrairement à une simple recherche de texte
-    // d'erreur, qui peut rester silencieusement "positive" à tort si le
-    // formulaire n'a en fait pas été soumis).
-    const stillOnLoginForm = (await page.locator(CONFIG.loginSelectors.submit).count()) > 0;
-    result.loggedIn = !stillOnLoginForm;
+    // Vérification fiable : on sonde jusqu'à ce que le bouton "Login" du
+    // formulaire ait disparu (vraie sortie de l'écran de connexion), au
+    // lieu d'une seule vérification ponctuelle après networkidle — la
+    // validation côté serveur peut prendre plus de temps que ça.
+    const loggedInOk = await waitUntilGone(page, CONFIG.loginSelectors.submit, CONFIG.timeoutMs);
+    result.loggedIn = loggedInOk;
 
     if (!result.loggedIn) {
       result.debug = await dumpDebug(page, 'login-failed');
