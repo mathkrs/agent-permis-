@@ -146,15 +146,25 @@ async function run() {
     process.exit(2);
   }
 
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy;
-  const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
-    headless: true,
-    proxy: proxyUrl ? { server: proxyUrl } : undefined,
-  });
-  const page = await browser.newPage();
-
   const result = { ok: false, loggedIn: false, available: false, dates: [], debug: {} };
+
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy;
+  let browser;
+  try {
+    browser = await chromium.launch({
+      // Sans CHROMIUM_PATH, on laisse Playwright utiliser le Chromium qu'il
+      // a lui-même téléchargé (npx playwright install chromium).
+      executablePath: process.env.CHROMIUM_PATH || undefined,
+      headless: true,
+      proxy: proxyUrl ? { server: proxyUrl } : undefined,
+    });
+  } catch (e) {
+    result.error = 'browser_launch_failed';
+    result.detail = e.message;
+    console.log(JSON.stringify(result));
+    process.exit(1);
+  }
+  const page = await browser.newPage();
 
   try {
     await page.goto(LOGIN_URL, { waitUntil: 'networkidle', timeout: CONFIG.timeoutMs });
