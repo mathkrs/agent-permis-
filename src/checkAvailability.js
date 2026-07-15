@@ -259,6 +259,15 @@ async function run() {
       await choisirLink.first().waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
       await choisirLink.first().click();
       await page.waitForLoadState('networkidle', { timeout: CONFIG.timeoutMs }).catch(() => {});
+      // Le lieu d'examen ("Chargement lieux...") puis le calendrier se
+      // chargent de façon asynchrone après la navigation — networkidle
+      // seul ne suffit pas à garantir que ce soit terminé. On attend
+      // explicitement l'apparition du <select id="lieu"> confirmé lors
+      // d'un test manuel, puis un nouveau networkidle pour le calendrier
+      // qui se charge une fois le lieu connu.
+      await page.locator('#lieu').waitFor({ state: 'visible', timeout: CONFIG.timeoutMs }).catch(() => {});
+      await page.waitForLoadState('networkidle', { timeout: CONFIG.timeoutMs }).catch(() => {});
+      await page.waitForTimeout(1000);
     } catch (e) {
       result.debug = await dumpDebug(page, 'choisir-link-not-found');
       result.error = 'choisir_link_not_found';
