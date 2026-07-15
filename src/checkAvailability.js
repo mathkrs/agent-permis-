@@ -16,12 +16,10 @@
  *   FABER_NIP        ex: "69365295"
  *   FABER_BIRTHDATE  ex: "04.03.2005"  (format à confirmer avec le site réel)
  *
- * IMPORTANT : les sélecteurs de connexion (NIP FABER + date de
- * naissance) ont été validés contre le vrai site. En revanche, les
- * sélecteurs de la page POST-login (calendrier de créneaux disponibles,
- * message "aucune disponibilité") sont encore des hypothèses non
- * confirmées — à ajuster lors d'un run allant jusqu'au bout (voir
- * README.md, dossier run-output/ en cas d'échec).
+ * Tout le parcours (login -> page d'accueil -> clic "Choisir" -> lecture
+ * du calendrier hebdomadaire de créneaux) a été validé contre le vrai
+ * site. En cas d'échec malgré tout (site changé, CAPTCHA), voir le
+ * dossier run-output/ pour diagnostiquer (voir README.md).
  */
 
 const path = require('path');
@@ -41,15 +39,6 @@ const OUT_DIR = process.env.CHECK_OUT_DIR || path.join(__dirname, '..', 'run-out
 // Points d'ajustement principaux si les sélecteurs réels diffèrent.
 const CONFIG = {
   timeoutMs: 30000,
-  // Textes indiquant explicitement "pas de date dispo" sur la page de résultat.
-  noAvailabilityPatterns: [/aucune disponibilit/i, /pas de rendez-vous/i, /aucun rendez-vous disponible/i, /aucune date/i],
-  // Sélecteur générique des cases de calendrier cliquables/disponibles.
-  availableSlotSelectors: [
-    '.available:not(.disabled)',
-    '[data-available="true"]',
-    'button.slot-available',
-    'td.calendar-day.available',
-  ],
   // Seules les dates dans cette fenêtre comptent comme une disponibilité
   // exploitable (bornes incluses). Remplaçables via DATE_RANGE_START /
   // DATE_RANGE_END (format AAAA-MM-JJ) en variable d'environnement.
@@ -67,6 +56,19 @@ const CONFIG = {
     nip: '#candidateId',
     birthday: '#birthday input',
     submit: 'form button[type="submit"]',
+  },
+  // Sélecteurs confirmés sur la page .../rendez-vous/chooseDate : la vue
+  // "Choisir" ouvre un calendrier hebdomadaire (Lundi-Vendredi) dupliqué
+  // deux fois dans le DOM (une version desktop visible, une version
+  // mobile cachée par CSS) — on ne cible que la version desktop
+  // (#desktop) pour ne pas compter chaque créneau deux fois. Chaque jour
+  // affiche soit "Aucun rendez-vous libre", soit un ou plusieurs boutons
+  // ".hour button" avec l'heure du créneau.
+  calendarSelectors: {
+    dayBlock: '#desktop [id="jour"]',
+    dayDate: 'h3',
+    slotButton: '.hour button',
+    nextWeekButton: '#right .navButton',
   },
 };
 
@@ -109,6 +111,48 @@ async function dumpDebug(page, label) {
     // best effort
   }
   return { png, html };
+}
+
+// Parcourt le calendrier hebdomadaire (semaine affichée, puis clic sur
+// ">" pour la suivante) et collecte tous les créneaux disponibles dont la
+// date tombe dans dateRange. S'arrête dès que la dernière date vue dans
+// la semaine courante dépasse dateRange.end, ou après maxWeeks par
+// sécurité (au cas où le site n'annoncerait jamais avoir atteint la fin).
+async function collectWeeklySlots(page, sel, dateRange, timeoutMs, maxWeeks = 12) {
+  const results = [];
+  for (let week = 0; week < maxWeeks; week++) {
+    const dayBlocks = page.locator(sel.dayBlock);
+    const count = await dayBlocks.count();
+    let lastDateThisWeek = null;
+
+    for (let i = 0; i < count; i++) {
+      const block = dayBlocks.nth(i);
+      const dateText = await block.locator(sel.dayDate).innerText().catch(() => '');
+      const iso = extractDateISO(dateText);
+      if (!iso) continue;
+      lastDateThisWeek = iso;
+
+      if (isWithinRange(iso, dateRange)) {
+        const slotButtons = block.locator(sel.slotButton);
+        const slotCount = await slotButtons.count();
+        for (let s = 0; s < slotCount; s++) {
+          const timeText = (await slotButtons.nth(s).innerText().catch(() => '')).trim();
+          results.push({ date: iso, time: timeText, text: `${iso} ${timeText}` });
+        }
+      }
+    }
+
+    if (lastDateThisWeek && lastDateThisWeek >= dateRange.end) break;
+
+    const nextBtn = page.locator(sel.nextWeekButton).first();
+    if ((await nextBtn.count()) === 0) break;
+    const disabled = await nextBtn.isDisabled().catch(() => true);
+    if (disabled) break;
+    await nextBtn.click();
+    await page.waitForTimeout(600);
+    await page.waitForLoadState('networkidle', { timeout: timeoutMs }).catch(() => {});
+  }
+  return results;
 }
 
 // Attend, en sondant régulièrement plutôt qu'avec une seule vérification
@@ -291,8 +335,17 @@ async function run() {
       process.exit(3);
     }
 
+    const slots = await collectWeeklySlots(
+      page,
+      CONFIG.calendarSelectors,
+      CONFIG.dateRange,
+      CONFIG.timeoutMs
+    );
+
     result.ok = true;
-    result.error = 'calendar_page_not_yet_parsed';
+    result.available = slots.length > 0;
+    result.dates = slots;
+    result.dateRange = CONFIG.dateRange;
     result.debug = await dumpDebug(page, 'chooseDate-page');
     console.log(JSON.stringify(result));
     await browser.close();
