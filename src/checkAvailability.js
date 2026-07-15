@@ -16,10 +16,12 @@
  *   FABER_NIP        ex: "69365295"
  *   FABER_BIRTHDATE  ex: "04.03.2005"  (format à confirmer avec le site réel)
  *
- * IMPORTANT : ce script n'a jamais pu être exécuté contre le vrai site
- * (accès réseau bloqué au moment de l'écriture). Les sélecteurs listés
- * dans CONFIG ci-dessous sont des hypothèses à valider/corriger lors du
- * premier run réel (voir README.md).
+ * IMPORTANT : les sélecteurs de connexion (NIP FABER + date de
+ * naissance) ont été validés contre le vrai site. En revanche, les
+ * sélecteurs de la page POST-login (calendrier de créneaux disponibles,
+ * message "aucune disponibilité") sont encore des hypothèses non
+ * confirmées — à ajuster lors d'un run allant jusqu'au bout (voir
+ * README.md, dossier run-output/ en cas d'échec).
  */
 
 const path = require('path');
@@ -39,11 +41,6 @@ const OUT_DIR = process.env.CHECK_OUT_DIR || path.join(__dirname, '..', 'run-out
 // Points d'ajustement principaux si les sélecteurs réels diffèrent.
 const CONFIG = {
   timeoutMs: 30000,
-  // Textes / labels probables des champs de connexion (FABER = identifiant
-  // figurant sur la convocation/lettre OCV).
-  nipLabelPatterns: [/faber/i, /n°?\s*nip/i, /identifiant/i],
-  birthdateLabelPatterns: [/naissance/i, /date de naissance/i],
-  submitTextPatterns: [/connexion/i, /se connecter/i, /valider/i, /continuer/i],
   // Textes indiquant explicitement "pas de date dispo" sur la page de résultat.
   noAvailabilityPatterns: [/aucune disponibilit/i, /pas de rendez-vous/i, /aucun rendez-vous disponible/i, /aucune date/i],
   // Sélecteur générique des cases de calendrier cliquables/disponibles.
@@ -59,6 +56,17 @@ const CONFIG = {
   dateRange: {
     start: process.env.DATE_RANGE_START || '2026-07-15',
     end: process.env.DATE_RANGE_END || '2026-08-02',
+  },
+  // Sélecteurs confirmés sur le vrai formulaire (Angular/PrimeNG) de
+  // ge.ch/tradispoweb_public : le champ NIP FABER est un <input> classique
+  // (id="candidateId"), mais le champ date de naissance est un composant
+  // <p-inputmask id="birthday"> dont l'<input> réel est imbriqué à
+  // l'intérieur (le label pointe vers le composant, pas vers l'input, donc
+  // getByLabel ne le trouve pas).
+  loginSelectors: {
+    nip: '#candidateId',
+    birthday: '#birthday input',
+    submit: 'form button[type="submit"]',
   },
 };
 
@@ -103,39 +111,14 @@ async function dumpDebug(page, label) {
   return { png, html };
 }
 
-async function fillByLabelPatterns(page, patterns, value) {
-  // Essaie plusieurs stratégies Playwright pour trouver le bon champ,
-  // car on ne connaît pas la structure DOM réelle du formulaire.
-  for (const pattern of patterns) {
-    try {
-      const byLabel = page.getByLabel(pattern);
-      if (await byLabel.count()) {
-        await byLabel.first().fill(value);
-        return true;
-      }
-    } catch (_) {}
-    try {
-      const byPlaceholder = page.getByPlaceholder(pattern);
-      if (await byPlaceholder.count()) {
-        await byPlaceholder.first().fill(value);
-        return true;
-      }
-    } catch (_) {}
-  }
-  return false;
-}
-
-async function clickByTextPatterns(page, patterns) {
-  for (const pattern of patterns) {
-    try {
-      const btn = page.getByRole('button', { name: pattern });
-      if (await btn.count()) {
-        await btn.first().click();
-        return true;
-      }
-    } catch (_) {}
-  }
-  return false;
+// Remplit un champ à "masque de saisie" (PrimeNG p-inputmask) : .fill()
+// contourne le gestionnaire de touches du masque et laisse le champ vide
+// ou invalide, donc on tape les chiffres un par un pour laisser le masque
+// insérer lui-même les séparateurs (ex: "." pour 99.99.9999).
+async function fillMaskedDate(locator, rawDate) {
+  const digitsOnly = rawDate.replace(/\D/g, '');
+  await locator.click();
+  await locator.pressSequentially(digitsOnly, { delay: 50 });
 }
 
 async function run() {
@@ -180,8 +163,19 @@ async function run() {
       } catch (_) {}
     }
 
-    const filledNip = await fillByLabelPatterns(page, CONFIG.nipLabelPatterns, nip);
-    const filledBirthdate = await fillByLabelPatterns(page, CONFIG.birthdateLabelPatterns, birthdate);
+    let filledNip = false;
+    let filledBirthdate = false;
+    try {
+      const nipInput = page.locator(CONFIG.loginSelectors.nip);
+      await nipInput.waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
+      await nipInput.fill(nip);
+      filledNip = true;
+
+      const birthdayInput = page.locator(CONFIG.loginSelectors.birthday);
+      await birthdayInput.waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
+      await fillMaskedDate(birthdayInput, birthdate);
+      filledBirthdate = true;
+    } catch (_) {}
 
     if (!filledNip || !filledBirthdate) {
       result.debug = await dumpDebug(page, 'login-form-not-found');
@@ -191,7 +185,15 @@ async function run() {
       process.exit(3);
     }
 
-    const clicked = await clickByTextPatterns(page, CONFIG.submitTextPatterns);
+    let clicked = false;
+    try {
+      const submitBtn = page.locator(CONFIG.loginSelectors.submit);
+      // .click() attend automatiquement que le bouton devienne "enabled"
+      // (le formulaire Angular l'active une fois les deux champs valides).
+      await submitBtn.click({ timeout: CONFIG.timeoutMs });
+      clicked = true;
+    } catch (_) {}
+
     if (!clicked) {
       result.debug = await dumpDebug(page, 'submit-button-not-found');
       result.error = 'submit_button_not_found';
