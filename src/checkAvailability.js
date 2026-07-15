@@ -215,6 +215,11 @@ async function run() {
       process.exit(3);
     }
 
+    // Capture immédiate (avant d'attendre networkidle) au cas où le site
+    // affiche un message d'erreur transitoire (toast) qui disparaît vite.
+    await page.waitForTimeout(1000);
+    await dumpDebug(page, 'after-submit-click');
+
     await page.waitForLoadState('networkidle', { timeout: CONFIG.timeoutMs }).catch(() => {});
 
     const bodyText = await page.locator('body').innerText().catch(() => '');
