@@ -248,42 +248,32 @@ async function run() {
       process.exit(5);
     }
 
-    const noAvailability = CONFIG.noAvailabilityPatterns.some((p) => p.test(bodyText));
-
-    let availableSlots = [];
-    for (const sel of CONFIG.availableSlotSelectors) {
-      try {
-        const els = await page.locator(sel).all();
-        if (els.length) {
-          for (const el of els) {
-            const t = (await el.innerText().catch(() => '')).trim();
-            if (t) availableSlots.push(t);
-          }
-        }
-      } catch (_) {}
-    }
-
-    // On ne garde que les créneaux dont la date tombe dans la fenêtre
-    // demandée (ex: entre demain et la dernière date valide de l'invitation).
-    const datesInRange = [];
-    const datesOutOfRange = [];
-    for (const slotText of availableSlots) {
-      const iso = extractDateISO(slotText);
-      if (iso && isWithinRange(iso, CONFIG.dateRange)) {
-        datesInRange.push({ text: slotText, date: iso });
-      } else {
-        datesOutOfRange.push({ text: slotText, date: iso });
-      }
+    // Étape confirmée manuellement : depuis la page d'accueil "Rendez-vous
+    // d'examens", il faut cliquer sur le lien "Choisir" de la ligne
+    // Pratique/B pour arriver sur le calendrier hebdomadaire des créneaux
+    // (URL .../rendez-vous/chooseDate). On capture cette page pour l'instant
+    // sans encore savoir en parser précisément les créneaux — étape
+    // temporaire le temps d'obtenir le vrai HTML de cette page.
+    try {
+      const choisirLink = page.getByText('Choisir', { exact: true });
+      await choisirLink.first().waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
+      await choisirLink.first().click();
+      await page.waitForLoadState('networkidle', { timeout: CONFIG.timeoutMs }).catch(() => {});
+    } catch (e) {
+      result.debug = await dumpDebug(page, 'choisir-link-not-found');
+      result.error = 'choisir_link_not_found';
+      result.detail = e.message;
+      console.log(JSON.stringify(result));
+      await browser.close();
+      process.exit(3);
     }
 
     result.ok = true;
-    result.available = !noAvailability && datesInRange.length > 0;
-    result.dates = datesInRange;
-    result.datesOutOfRange = datesOutOfRange;
-    result.dateRange = CONFIG.dateRange;
-    result.debug = await dumpDebug(page, 'post-login-state');
-
+    result.error = 'calendar_page_not_yet_parsed';
+    result.debug = await dumpDebug(page, 'chooseDate-page');
     console.log(JSON.stringify(result));
+    await browser.close();
+    process.exit(0);
   } catch (e) {
     try {
       result.debug = await dumpDebug(page, 'unexpected-error');
