@@ -53,7 +53,41 @@ const CONFIG = {
     'button.slot-available',
     'td.calendar-day.available',
   ],
+  // Seules les dates dans cette fenêtre comptent comme une disponibilité
+  // exploitable (bornes incluses). Remplaçables via DATE_RANGE_START /
+  // DATE_RANGE_END (format AAAA-MM-JJ) en variable d'environnement.
+  dateRange: {
+    start: process.env.DATE_RANGE_START || '2026-07-15',
+    end: process.env.DATE_RANGE_END || '2026-08-02',
+  },
 };
+
+const FRENCH_MONTHS = {
+  janvier: 1, février: 2, fevrier: 2, mars: 3, avril: 4, mai: 5, juin: 6,
+  juillet: 7, août: 8, aout: 8, septembre: 9, octobre: 10, novembre: 11, décembre: 12, decembre: 12,
+};
+
+// Extrait la première date reconnaissable d'un texte de créneau et la
+// renvoie en 'AAAA-MM-JJ', ou null si aucun format connu ne matche.
+// Formats supportés : jj.mm.aaaa, jj/mm/aaaa, jj-mm-aaaa, "jj <mois> aaaa".
+function extractDateISO(text) {
+  let m = text.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+  if (m) {
+    const [, d, mo, y] = m;
+    return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  m = text.match(/(\d{1,2})\s+([a-zéû]+)\s+(\d{4})/i);
+  if (m) {
+    const [, d, monthName, y] = m;
+    const mo = FRENCH_MONTHS[monthName.toLowerCase()];
+    if (mo) return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+function isWithinRange(isoDate, range) {
+  return isoDate >= range.start && isoDate <= range.end;
+}
 
 async function dumpDebug(page, label) {
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -195,9 +229,24 @@ async function run() {
       } catch (_) {}
     }
 
+    // On ne garde que les créneaux dont la date tombe dans la fenêtre
+    // demandée (ex: entre demain et la dernière date valide de l'invitation).
+    const datesInRange = [];
+    const datesOutOfRange = [];
+    for (const slotText of availableSlots) {
+      const iso = extractDateISO(slotText);
+      if (iso && isWithinRange(iso, CONFIG.dateRange)) {
+        datesInRange.push({ text: slotText, date: iso });
+      } else {
+        datesOutOfRange.push({ text: slotText, date: iso });
+      }
+    }
+
     result.ok = true;
-    result.available = !noAvailability && availableSlots.length > 0;
-    result.dates = availableSlots;
+    result.available = !noAvailability && datesInRange.length > 0;
+    result.dates = datesInRange;
+    result.datesOutOfRange = datesOutOfRange;
+    result.dateRange = CONFIG.dateRange;
     result.debug = await dumpDebug(page, 'post-login-state');
 
     console.log(JSON.stringify(result));
