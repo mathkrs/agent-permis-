@@ -4,9 +4,12 @@
   "private": true,
   "description": "Vérificateur automatique de disponibilité d'examen pratique de conduite (OCV Genève / Tradispo)",
   "scripts": {
-    "check": "node src/checkAvailability.js"
+    "check": "node src/checkAvailability.js",
+    "start": "node src/runAndNotify.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.15",
     "playwright": "^1.56.1"
   }
 }
