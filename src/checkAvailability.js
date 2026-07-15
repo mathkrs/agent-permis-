@@ -114,11 +114,25 @@ async function dumpDebug(page, label) {
 // Remplit un champ à "masque de saisie" (PrimeNG p-inputmask) : .fill()
 // contourne le gestionnaire de touches du masque et laisse le champ vide
 // ou invalide, donc on tape les chiffres un par un pour laisser le masque
-// insérer lui-même les séparateurs (ex: "." pour 99.99.9999).
-async function fillMaskedDate(locator, rawDate) {
+// insérer lui-même les séparateurs (ex: "." pour 99.99.9999). Le premier
+// caractère tapé juste après le clic est parfois perdu par le masque
+// (course entre le focus et la frappe), ce qui décale toute la saisie
+// ("04.03.2005" devient "40.32.0050") — on vérifie donc la valeur
+// obtenue et on réessaie en cas de décalage.
+async function fillMaskedDate(page, locator, rawDate) {
   const digitsOnly = rawDate.replace(/\D/g, '');
-  await locator.click();
-  await locator.pressSequentially(digitsOnly, { delay: 50 });
+  const expected = `${digitsOnly.slice(0, 2)}.${digitsOnly.slice(2, 4)}.${digitsOnly.slice(4, 8)}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await locator.click();
+    await locator.press('Control+A').catch(() => {});
+    await locator.press('Delete').catch(() => {});
+    await page.waitForTimeout(150);
+    await locator.pressSequentially(digitsOnly, { delay: 80 });
+    await page.waitForTimeout(150);
+    const value = await locator.inputValue().catch(() => '');
+    if (value === expected) return true;
+  }
+  return false;
 }
 
 async function run() {
@@ -173,13 +187,12 @@ async function run() {
 
       const birthdayInput = page.locator(CONFIG.loginSelectors.birthday);
       await birthdayInput.waitFor({ state: 'visible', timeout: CONFIG.timeoutMs });
-      await fillMaskedDate(birthdayInput, birthdate);
-      filledBirthdate = true;
+      filledBirthdate = await fillMaskedDate(page, birthdayInput, birthdate);
     } catch (_) {}
 
     if (!filledNip || !filledBirthdate) {
       result.debug = await dumpDebug(page, 'login-form-not-found');
-      result.error = 'login_fields_not_found';
+      result.error = filledNip ? 'birthdate_fill_mismatch' : 'login_fields_not_found';
       console.log(JSON.stringify(result));
       await browser.close();
       process.exit(3);
@@ -214,11 +227,13 @@ async function run() {
       process.exit(4);
     }
 
-    // Heuristique très simple : si le formulaire de login a disparu et
-    // qu'on ne voit pas de message d'erreur de connexion, on considère
-    // que le login a réussi.
-    const loginErrorVisible = /identifiant.*incorrect|erreur de connexion|invalide/i.test(bodyText);
-    result.loggedIn = !loginErrorVisible;
+    // Vérification fiable : si le bouton "Login" du formulaire est
+    // toujours présent dans la page, on n'a pas réellement quitté l'écran
+    // de connexion (contrairement à une simple recherche de texte
+    // d'erreur, qui peut rester silencieusement "positive" à tort si le
+    // formulaire n'a en fait pas été soumis).
+    const stillOnLoginForm = (await page.locator(CONFIG.loginSelectors.submit).count()) > 0;
+    result.loggedIn = !stillOnLoginForm;
 
     if (!result.loggedIn) {
       result.debug = await dumpDebug(page, 'login-failed');
