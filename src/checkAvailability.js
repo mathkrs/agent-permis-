@@ -146,9 +146,11 @@ async function run() {
     process.exit(2);
   }
 
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.https_proxy;
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium',
     headless: true,
+    proxy: proxyUrl ? { server: proxyUrl } : undefined,
   });
   const page = await browser.newPage();
 
