@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#3a4866">
+<title>stock α — Control de inventario claro y simple para su comercio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0}
+  @keyframes pulseDot{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes saleTicket{0%,10%{opacity:0;transform:translateX(-18px) scale(.96)}18%,42%{opacity:1;transform:translateX(0) scale(1)}52%,100%{opacity:0;transform:translateX(0) scale(.98)}}
+  @keyframes flowDash{to{stroke-dashoffset:-22}}
+  @keyframes stockStep{0%,17%{width:78%}25%,50%{width:60%}58%,83%{width:60%}100%{width:78%}}
+  @keyframes qtyPulse{0%,17%{opacity:.5}25%,50%{opacity:1}58%,100%{opacity:.5}}
+  @keyframes floatMinus{0%,16%{opacity:0;transform:translateY(8px)}26%{opacity:1;transform:translateY(-2px)}46%{opacity:0;transform:translateY(-14px)}100%{opacity:0}}
+  .page{
+    background-color:#3a4866;
+    --bg:#3a4866;--navbg:#3f4d6a;--panel:#4b5974;--surf:#46546f;--sectionAlt:#33415a;
+    --ink:#eef1f9;--muted:#b6c0d8;--line:rgba(175,190,230,.22);
+    --accent:#6f97f0;--accent2:#97b4f7;--hero:#9db8ff;--amber:#f0b56a;--green:#74d6a3;--red:#e0795f;--btn:#fff;
+    font-family:'Space Grotesk',system-ui,sans-serif;color:var(--ink);min-height:100vh;
+    transition:background-color .4s ease,color .4s ease;
+  }
+  .page[data-theme="jour"]{
+    background-color:#e9edf6;
+    --bg:#e9edf6;--navbg:#f5f7fc;--panel:#f7f9fd;--surf:#f4f6fb;--sectionAlt:#dfe5f0;
+    --ink:#1f2a44;--muted:#5d6a87;--line:#d4ddec;
+    --accent:#3f6fe0;--accent2:#3f6fe0;--hero:#3f6fe0;--amber:#c5841f;--green:#1f9d63;--red:#d9534f;--btn:#fff;
+  }
+  a{text-decoration:none;color:inherit}
+  .hov-accent{transition:color .22s ease}
+  .hov-accent:hover{color:var(--accent)}
+  .btn-accent{transition:filter .2s ease,transform .2s ease,box-shadow .2s ease}
+  .btn-accent:hover{filter:brightness(1.07);transform:translateY(-2px)}
+  .btn-outline{transition:border-color .2s ease,color .2s ease}
+  .btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+  .card-lift{transition:transform .32s cubic-bezier(.4,0,.2,1),box-shadow .32s ease,border-color .32s ease}
+  .card-lift:hover{transform:translateY(-3px);box-shadow:0 20px 38px -24px rgba(15,20,38,.5);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+  @media(max-width:920px){
+    .hero-grid,.disc-grid,.movil-grid{grid-template-columns:1fr!important;gap:40px!important}
+    .feat-grid{grid-template-columns:1fr 1fr!important}
+    .nav-links,.lang-pill{display:none!important}
+    .h1-big{font-size:38px!important}
+    .pd-cols{grid-template-columns:1fr!important}
+    .foot-grid{grid-template-columns:1fr 1fr!important}
+  }
+  @media(max-width:560px){
+    .feat-grid,.price-grid,.steps-grid{grid-template-columns:1fr!important}
+    .h1-big{font-size:32px!important}
+    .kpi3{grid-template-columns:1fr 1fr 1fr!important}
+    .foot-grid{grid-template-columns:1fr!important}
+  }
+</style>
+</head>
+<body>
+<div class="page" data-theme="slate" id="page" style="font-family:'Space Grotesk',system-ui,sans-serif">
+
+  <button onclick="toggleTheme()" style="position:fixed;bottom:20px;right:20px;z-index:50;display:inline-flex;align-items:center;gap:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:10px 16px;font-size:13px;font-weight:600;font-family:'Space Grotesk',sans-serif;cursor:pointer;box-shadow:0 16px 34px -14px rgba(10,16,32,.55)">
+    <span style="width:13px;height:13px;border-radius:50%;background:linear-gradient(90deg,var(--accent) 50%,#e6ebf5 50%);display:inline-block;border:1px solid var(--line)"></span><span id="themePrefix">Tema · </span><b style="font-weight:700" id="themeName">Slate clair</b>
+  </button>
+
+  <div id="announce" style="position:relative;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;gap:12px;padding:9px 40px;font-size:13px;font-weight:600">
+    <span data-i18n="k0">Nuevo · Alertas automáticas de stock bajo, ya disponibles</span>
+    <span onclick="document.getElementById('announce').style.display='none'" style="position:absolute;right:16px;cursor:pointer;font-size:16px;opacity:.85;line-height:1">×</span>
+  </div>
+
+  <header style="position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--navbg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)">
+    <div style="max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 32px">
+      <div style="display:flex;align-items:center;gap:34px">
+        <a href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" style="display:flex;align-items:center;gap:9px;cursor:pointer">
+          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(160deg,#5b86e8,#2f5fd0);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px -3px rgba(47,95,208,.5)"><span style="font-family:'Sora',sans-serif;font-size:27px;font-weight:700;color:#fff;line-height:1">α</span></div>
+          <div style="font-size:23px;font-weight:700;letter-spacing:-.01em;color:var(--ink);white-space:nowrap">stock</div>
+        </a>
+        <nav class="nav-links" style="display:flex;align-items:center;gap:24px">
+          <a href="#funciones" class="hov-accent" style="font-size:14px;font-weight:600;color:var(--ink);cursor:pointer" data-i18n="k1">Funciones</a>
+          <a href="#precios" class="hov-accent" style="font-size:14px;font-weight:600;color:var(--muted);cursor:pointer" data-i18n="k2">Precios</a>
+          <a href="#como" class="hov-accent" style="font-size:14px;font-weight:600;color:var(--muted);cursor:pointer" data-i18n="k3">Cómo funciona</a>
+          <a href="#contacto" class="hov-accent" style="font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:5px" data-i18n="k4">Contacto</a>
+        </nav>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div class="lang-pill" style="display:flex;background:var(--surf);border-radius:999px;padding:3px;border:1px solid var(--line)"><span onclick="setLang('es')" data-lang-btn="es" style="font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;cursor:pointer">ES</span><span onclick="setLang('en')" data-lang-btn="en" style="font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;cursor:pointer">EN</span><span onclick="setLang('fr')" data-lang-btn="fr" style="font-size:12px;font-weight:600;padding:5px 10px;border-radius:999px;cursor:pointer">FR</span></div>
+        <span class="hov-accent" onclick="goApp()" style="font-size:14px;font-weight:600;color:var(--ink);cursor:pointer" data-i18n="k5">Iniciar sesión</span>
+        <span class="btn-accent" onclick="goApp()" style="font-size:14px;font-weight:700;color:var(--btn);background:var(--accent);padding:10px 17px;border-radius:10px;cursor:pointer" data-i18n="k6">Comenzar gratis</span>
+      </div>
+    </div>
+  </header>
+
+  <section style="position:relative;overflow:hidden;background:radial-gradient(820px 360px at 82% 14%,color-mix(in srgb,var(--accent) 13%,transparent),transparent 70%)">
+    <div style="position:absolute;top:-40px;right:60px;width:440px;height:440px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--accent) 30%,transparent),transparent 68%);filter:blur(50px);opacity:.55;pointer-events:none"></div>
+    <div class="hero-grid" style="max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;padding:64px 32px 70px;position:relative;z-index:1">
+      <div>
+        <div style="display:inline-flex;align-items:center;gap:8px;background:var(--surf);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:22px"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent2);animation:pulseDot 1.8s infinite"></span><span data-i18n="badge1">Control de stock en tiempo real</span></div>
+        <h1 class="h1-big" style="font-size:58px;line-height:1.02;font-weight:700;letter-spacing:-.03em;margin:0 0 18px;color:var(--ink)"><span data-i18n="h1a">Su inventario,</span><br><span style="color:var(--hero)" data-i18n="h1b">claro y bajo control.</span></h1>
+        <p style="font-size:18px;line-height:1.55;color:var(--muted);margin:0 0 30px;max-width:440px" data-i18n="k8">La herramienta simple y profesional para gestionar su stock, recibir alertas y tomar mejores decisiones. Sin hojas de cálculo interminables.</p>
+        <div style="display:flex;gap:14px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+          <span class="btn-accent" onclick="goApp()" style="font-size:16px;font-weight:700;color:var(--btn);background:var(--accent);padding:15px 26px;border-radius:12px;cursor:pointer;box-shadow:0 12px 24px -12px color-mix(in srgb,var(--accent) 65%,transparent)" data-i18n="k6">Comenzar gratis</span>
+          <span class="btn-outline" onclick="goApp()" style="font-size:16px;font-weight:600;color:var(--ink);padding:14px 24px;border:1px solid var(--line);border-radius:12px;cursor:pointer" data-i18n="k9">Ver demo</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--muted)" data-i18n="k10"><span style="width:20px;height:20px;border-radius:50%;background:color-mix(in srgb,var(--green) 22%,transparent);color:var(--green);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">✓</span>14 días de prueba gratis — sin tarjeta bancaria</div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(15,20,38,.6),0 8px 24px -12px rgba(15,20,38,.4),inset 0 1px 0 color-mix(in srgb,#fff 12%,transparent)">
+        <div style="display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid var(--line)"><span style="width:9px;height:9px;border-radius:50%;background:color-mix(in srgb,var(--muted) 50%,transparent)"></span><span style="width:9px;height:9px;border-radius:50%;background:color-mix(in srgb,var(--muted) 50%,transparent)"></span><span style="margin-left:8px;font-size:12px;font-weight:600;color:var(--muted)" data-i18n="k11">Panel · Inventario</span></div>
+        <div style="padding:20px">
+          <div class="kpi3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-bottom:16px">
+            <div style="background:color-mix(in srgb,var(--accent) 13%,transparent);border:1px solid var(--line);border-radius:12px;padding:13px"><div style="font-size:11px;color:var(--muted);font-weight:600" data-i18n="k12">Productos</div><div style="font-size:20px;font-weight:700;color:var(--ink)" data-count="128">128</div></div>
+            <div style="background:color-mix(in srgb,var(--amber) 17%,transparent);border:1px solid color-mix(in srgb,var(--amber) 32%,transparent);border-radius:12px;padding:13px"><div style="font-size:11px;color:var(--amber);font-weight:600" data-i18n="k13">Bajo stock</div><div style="font-size:20px;font-weight:700;color:var(--amber)" data-count="5">5</div></div>
+            <div style="background:color-mix(in srgb,var(--accent) 13%,transparent);border:1px solid var(--line);border-radius:12px;padding:13px"><div style="font-size:11px;color:var(--muted);font-weight:600" data-i18n="k14">Movimiento hoy</div><div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:20px;font-weight:700;color:var(--green)">+18</span><span style="font-size:14px;font-weight:700;color:var(--red)">−7</span></div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span style="font-size:11px;font-weight:700;color:var(--ink)" data-i18n="k15">Movimiento · 7 días</span><div style="display:flex;align-items:center;gap:10px;font-size:10px;font-weight:600;color:var(--muted)"><span style="display:inline-flex;align-items:center;gap:4px" data-i18n="k16"><span style="width:7px;height:7px;border-radius:2px;background:var(--green)"></span>Entradas</span><span style="display:inline-flex;align-items:center;gap:4px" data-i18n="k17"><span style="width:7px;height:7px;border-radius:2px;background:var(--accent)"></span>Ventas</span></div></div>
+          <div style="display:flex;align-items:flex-end;gap:10px;height:78px;margin-bottom:15px"><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:28px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:40px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:34px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:46px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:30px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:52px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:38px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:44px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:32px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:50px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><div style="flex:1;display:flex;align-items:flex-end;gap:2px;height:72px;justify-content:center"><div style="width:42%;height:64px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:26px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px"><span style="font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap" data-i18n="k18">Café molido 250g</span><span style="font-size:11px;font-weight:700;color:var(--green);background:color-mix(in srgb,var(--green) 17%,transparent);padding:3px 9px;border-radius:999px;white-space:nowrap" data-i18n="k19">En stock · 24</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px"><span style="font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap" data-i18n="k20">Bolsas kraft</span><span style="font-size:11px;font-weight:700;color:var(--red);background:color-mix(in srgb,var(--red) 16%,transparent);padding:3px 9px;border-radius:999px;white-space:nowrap" data-i18n="k21">Reabastecer · 2</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--line);background:var(--sectionAlt)">
+    <div style="max-width:1180px;margin:0 auto;padding:48px 32px;text-align:center">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;margin-bottom:10px" data-i18n="k22">Hecho para su comercio</div>
+      <h2 style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0 auto 10px;color:var(--ink);max-width:620px" data-i18n="k23">Sí, stock es para su negocio</h2>
+      <p style="font-size:16px;color:var(--muted);margin:0 auto 32px;max-width:540px" data-i18n="k24">Da igual lo que venda: si tiene productos que entran y salen, stock le ordena el inventario.</p>
+      <div style="display:flex;align-items:stretch;gap:16px;flex-wrap:wrap;justify-content:center">
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-4.5h15L21 9"></path><path d="M4 9v10h16V9"></path><path d="M9 19v-5h6v5"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k25">Almacén</span></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11c0-3 2.5-5 5-5 1.4 0 2.6.5 3.5 1.4C14.6 6.2 16 5.7 17.3 6c2 .5 3.2 2.6 2.6 4.6L17 19a2 2 0 0 1-1.9 1.4H8.3A2 2 0 0 1 6.4 19z"></path><path d="M9 10.5l1.5 7M13 10l1 7.5"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k26">Panadería</span></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6a3.5 3.5 0 0 0-4.8 4.3l-5 5a1.6 1.6 0 0 0 2.3 2.3l5-5A3.5 3.5 0 0 0 18 8.2l-2 2-2-2 2-2A3.4 3.4 0 0 0 14.5 6z"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k27">Ferretería</span></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.3"></circle><circle cx="17" cy="20" r="1.3"></circle><path d="M3 4h2l2.2 11.2a1.5 1.5 0 0 0 1.5 1.2h8.1a1.5 1.5 0 0 0 1.5-1.2L21 7H6"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k28">Minimarket</span></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4v3.5c0 .6.2 1.1.6 1.5l1.8 2c.4.4.6.9.6 1.5V20a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9.5c0-.6.2-1.1.6-1.5l1.8-2c.4-.4.6-.9.6-1.5z"></path><path d="M7 13h10"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k29">Botillería</span></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 14px;min-width:130px;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l3 3 3-2 3 2 3-3 1 6-2 1v9H7v-9l-2-1z"></path></svg><span style="font-size:14px;font-weight:600;color:var(--ink)" data-i18n="k30">Ropa y tienda</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="disc-grid" style="max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center;padding:66px 32px">
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;margin-bottom:14px" data-i18n="k31">En tiempo real</div>
+        <h2 style="font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em;margin:0 0 16px;color:var(--ink)" data-i18n="k32">Cada venta descuenta el stock, sola</h2>
+        <p style="font-size:17px;line-height:1.6;color:var(--muted);margin:0 0 24px;max-width:430px" data-i18n="k33">Registra una venta y el inventario se actualiza al instante. Sin restar a mano, sin sorpresas a fin de mes.</p>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:11px;align-items:center;font-size:15px;color:var(--ink)" data-i18n="k34"><span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--green) 20%,transparent);color:var(--green);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">✓</span>Inventario siempre al día, minuto a minuto</div>
+          <div style="display:flex;gap:11px;align-items:center;font-size:15px;color:var(--ink)" data-i18n="k35"><span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--green) 20%,transparent);color:var(--green);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">✓</span>Cada entrada de mercadería se registra al toque</div>
+          <div style="display:flex;gap:11px;align-items:center;font-size:15px;color:var(--ink)" data-i18n="k36"><span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb,var(--green) 20%,transparent);color:var(--green);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex:none">✓</span>Le avisa cuando algo baja de su mínimo</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:20px;background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:30px 26px;box-shadow:0 26px 50px -34px rgba(15,20,38,.45)">
+        <div style="flex:none;width:142px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;animation:saleTicket 4.2s ease-in-out infinite">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px" data-i18n="k37">Venta registrada</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:12px;font-weight:600;color:var(--ink)" data-i18n="k38">Café molido</span><span style="font-size:12px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace">×2</span></div>
+          <div style="height:1px;background:var(--line);margin:8px 0"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:11px;color:var(--muted)" data-i18n="k39">Total</span><span style="font-size:13px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace">$4.980</span></div>
+        </div>
+        <svg width="56" height="24" viewBox="0 0 56 24" fill="none" style="flex:none"><line x1="2" y1="12" x2="46" y2="12" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 6" stroke-linecap="round" style="animation:flowDash .9s linear infinite"></line><path d="M44 6l8 6-8 6" stroke="var(--accent)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <div style="flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px">
+          <div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px;white-space:nowrap" data-i18n="k18">Café molido 250g</div>
+          <div style="height:10px;border-radius:6px;background:color-mix(in srgb,var(--muted) 22%,transparent);overflow:hidden"><div style="height:100%;width:78%;border-radius:6px;background:linear-gradient(90deg,var(--accent2),var(--accent));animation:stockStep 4.2s ease-in-out infinite"></div></div>
+          <div style="margin-top:12px">
+            <span style="position:relative;display:inline-block;animation:qtyPulse 4.2s ease-in-out infinite"><span style="font-size:18px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace">24</span><span style="font-size:12px;font-weight:600;color:var(--muted);margin-left:4px" data-i18n="k40">unidades</span><span style="position:absolute;right:-22px;top:-2px;font-size:12px;font-weight:700;color:var(--red);animation:floatMinus 4.2s ease-in-out infinite">−2</span></span>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px" data-i18n="k41">Mínimo: 10 unidades</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="como" style="background:var(--sectionAlt);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+    <div style="max-width:1180px;margin:0 auto;padding:54px 32px">
+      <div style="text-align:center;margin-bottom:38px"><div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase" data-i18n="k3">Cómo funciona</div><h2 style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin:8px 0 0;color:var(--ink)" data-i18n="k43">Listo en tres pasos</h2></div>
+      <div class="steps-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px"><div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-bottom:14px">01</div><div style="font-size:18px;font-weight:700;color:var(--ink);margin-bottom:8px" data-i18n="k44">Agregue sus productos</div><div style="font-size:14px;line-height:1.55;color:var(--muted)" data-i18n="k45">Escanee el código de barras y el nombre y la cantidad se llenan solos. O impórtelos desde Excel. Sin perder tiempo.</div></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px"><div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-bottom:14px">02</div><div style="font-size:18px;font-weight:700;color:var(--ink);margin-bottom:8px" data-i18n="k46">Reciba alertas</div><div style="font-size:14px;line-height:1.55;color:var(--muted)" data-i18n="k47">Le avisamos antes de quedarse sin stock, para que nunca pierda una venta.</div></div>
+        <div class="card-lift" style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px"><div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-bottom:14px">03</div><div style="font-size:18px;font-weight:700;color:var(--ink);margin-bottom:8px" data-i18n="k48">Decida mejor</div><div style="font-size:14px;line-height:1.55;color:var(--muted)" data-i18n="k49">Mire qué se vende y qué reponer de un vistazo.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="funciones">
+    <div style="max-width:1180px;margin:0 auto;padding:64px 32px">
+      <div style="text-align:center;margin-bottom:40px"><div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase" data-i18n="k1">Funciones</div><h2 style="font-size:34px;font-weight:700;letter-spacing:-.02em;margin:8px 0 8px;color:var(--ink)" data-i18n="k51">Simple de usar, desde el primer día</h2><p style="font-size:16px;color:var(--muted);margin:0 auto;max-width:520px" data-i18n="k52">No necesitas saber de computación. stock hace el trabajo difícil por ti.</p></div>
+      <div class="feat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px">
+        <div class="card-lift" style="background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:22px"><div style="height:50px;display:flex;align-items:flex-end;gap:5px;margin-bottom:14px"><div style="width:9px;height:40%;background:color-mix(in srgb,var(--accent2) 40%,transparent);border-radius:3px"></div><div style="width:9px;height:72%;background:color-mix(in srgb,var(--accent2) 65%,transparent);border-radius:3px"></div><div style="width:9px;height:100%;background:var(--accent);border-radius:3px"></div></div><div style="font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px" data-i18n="k53">Todo a la vista</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k54">Vea lo que tiene y lo que se vende de un vistazo. Sin cálculos, sin complicaciones.</div></div>
+        <div class="card-lift" style="background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:22px"><div style="height:50px;display:flex;align-items:center;margin-bottom:14px"><span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--red);background:color-mix(in srgb,var(--red) 15%,transparent);padding:7px 12px;border-radius:999px" data-i18n="k70"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulseDot 1.6s infinite"></span>Stock bajo</span></div><div style="font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px" data-i18n="k55">Alertas inteligentes</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k56">Sabe al instante qué productos debe reabastecer.</div></div>
+        <a href="#bolsillo" class="card-lift" style="background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:22px;cursor:pointer;display:block"><div style="height:50px;display:flex;align-items:flex-end;gap:6px;margin-bottom:14px"><div style="width:28px;height:44px;border:2px solid var(--accent2);border-radius:5px"></div><div style="width:17px;height:30px;border:2px solid color-mix(in srgb,var(--accent2) 55%,transparent);border-radius:4px"></div></div><div style="font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:6px" data-i18n="k57">Multiplataforma <span style="color:var(--accent);font-size:15px">→</span></div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k58">Úselo en su teléfono y en su computador, siempre sincronizado.</div></a>
+        <div class="card-lift" style="background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:22px"><div style="height:50px;display:flex;align-items:center;margin-bottom:14px"><span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 11px">inventario.xlsx <span style="color:var(--accent);font-weight:800">↑</span></span></div><div style="font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px" data-i18n="k59">Importe y exporte</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k60">Cargue su inventario desde Excel o Google Sheets — reconoce sus productos — y expórtelo cuando quiera.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:var(--sectionAlt);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+    <div style="max-width:1180px;margin:0 auto;padding:60px 32px">
+      <div style="text-align:center;margin-bottom:34px"><div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase" data-i18n="k61">Su panel</div><h2 style="font-size:34px;font-weight:700;letter-spacing:-.02em;margin:8px auto 12px;color:var(--ink);max-width:620px" data-i18n="k62">Todo su negocio, en un solo panel</h2><p style="font-size:17px;color:var(--muted);margin:0 auto;max-width:520px" data-i18n="k63">Stock, movimiento y alertas en una sola vista. Rojo cuando hay que reponer, verde cuando todo va bien.</p></div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 34px 60px -36px rgba(15,20,38,.5)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 22px;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:color-mix(in srgb,var(--muted) 50%,transparent)"></span><span style="width:10px;height:10px;border-radius:50%;background:color-mix(in srgb,var(--muted) 50%,transparent)"></span><span style="margin-left:10px;font-size:13px;font-weight:700;color:var(--ink)" data-i18n="k64">Panel principal</span></div><div style="display:flex;gap:6px"><span style="font-size:12px;font-weight:700;color:var(--btn);background:var(--accent);padding:5px 11px;border-radius:8px" data-i18n="k65">7 días</span><span style="font-size:12px;font-weight:600;color:var(--muted);padding:5px 11px;border:1px solid var(--line);border-radius:8px" data-i18n="k66">30 días</span></div></div>
+        <div class="kpi3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:22px 22px 6px">
+          <div style="border:1px solid var(--line);border-radius:13px;padding:16px;background:color-mix(in srgb,var(--accent) 10%,transparent)"><div style="font-size:13px;color:var(--muted);font-weight:600;margin-bottom:8px" data-i18n="k12">Productos</div><div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:var(--ink)" data-count="128">128</div></div>
+          <div style="border:1px solid var(--line);border-radius:13px;padding:16px;background:color-mix(in srgb,var(--accent) 10%,transparent)"><div style="font-size:13px;color:var(--muted);font-weight:600;margin-bottom:8px" data-i18n="k14">Movimiento hoy</div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:var(--green)">+18</span><span style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--red)">−7</span></div></div>
+          <div style="border:1px solid var(--line);border-radius:13px;padding:16px;background:color-mix(in srgb,var(--amber) 16%,transparent)"><div style="font-size:13px;color:var(--amber);font-weight:600;margin-bottom:8px" data-i18n="k13">Bajo stock</div><div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:var(--amber)" data-count="5">5</div></div>
+        </div>
+        <div class="pd-cols" style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;padding:16px 22px 24px">
+          <div style="border:1px solid var(--line);border-radius:13px;padding:18px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:14px;font-weight:700;color:var(--ink)" data-i18n="k67">Movimiento de inventario</span><div style="display:flex;align-items:center;gap:12px;font-size:11px;font-weight:600;color:var(--muted)"><span style="display:inline-flex;align-items:center;gap:5px" data-i18n="k16"><span style="width:8px;height:8px;border-radius:2px;background:var(--green)"></span>Entradas</span><span style="display:inline-flex;align-items:center;gap:5px" data-i18n="k17"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></span>Ventas</span></div></div>
+            <div style="display:flex;align-items:flex-end;gap:12px;height:120px">
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:30px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:52px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">L</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:22px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:70px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">M</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:44px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:58px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">M</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:36px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:96px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--ink);font-weight:700">J</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:28px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:80px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">V</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:58px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:100px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">S</span></div>
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;align-items:flex-end;gap:3px;height:104px;width:100%;justify-content:center"><div style="width:42%;height:24px;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:4px 4px 0 0" data-grow></div><div style="width:42%;height:48px;background:var(--accent);border-radius:4px 4px 0 0" data-grow></div></div><span style="font-size:11px;color:var(--muted)">D</span></div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--line);border-radius:13px;padding:18px">
+            <span style="font-size:14px;font-weight:700;color:var(--ink);display:block;margin-bottom:14px" data-i18n="k68">Para reabastecer</span>
+            <div style="display:flex;flex-direction:column;gap:13px">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:var(--ink)" data-i18n="k20">Bolsas kraft</span><span style="font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:4px 10px;border-radius:999px;white-space:nowrap" data-i18n="k69">Reponer ya</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:var(--ink)" data-i18n="k71">Té verde</span><span style="font-size:11px;font-weight:700;color:var(--red);background:color-mix(in srgb,var(--red) 16%,transparent);padding:4px 10px;border-radius:999px;white-space:nowrap" data-i18n="k70">Stock bajo</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600;color:var(--ink)" data-i18n="k72">Servilletas</span><span style="font-size:11px;font-weight:700;color:var(--red);background:color-mix(in srgb,var(--red) 16%,transparent);padding:4px 10px;border-radius:999px;white-space:nowrap" data-i18n="k70">Stock bajo</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding-top:11px;border-top:1px solid var(--line)"><span style="font-size:13px;font-weight:600;color:var(--green)" data-i18n="k73">Todo lo demás</span><span style="font-size:11px;font-weight:700;color:var(--green);background:color-mix(in srgb,var(--green) 17%,transparent);padding:4px 10px;border-radius:999px;white-space:nowrap" data-i18n="k74">Al día</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="bolsillo" style="position:relative;overflow:hidden;background:radial-gradient(700px 360px at 18% 30%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 70%)">
+    <div class="movil-grid" style="max-width:1180px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center;padding:64px 32px">
+      <div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;margin-bottom:14px" data-i18n="k75">En su bolsillo</div>
+        <h2 style="font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em;margin:0 0 16px;color:var(--ink)" data-i18n="k76">Su negocio, también desde el teléfono</h2>
+        <p style="font-size:17px;line-height:1.55;color:var(--muted);margin:0 0 30px;max-width:420px" data-i18n="k77">Controle su stock desde el mostrador o donde esté. Cada venta descuenta inventario al instante.</p>
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:42px;height:42px;border-radius:11px;background:color-mix(in srgb,var(--accent) 16%,transparent);border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center"><div style="display:flex;gap:2px;align-items:center"><span style="width:2px;height:16px;background:var(--accent);display:block"></span><span style="width:1px;height:16px;background:var(--accent);display:block"></span><span style="width:3px;height:16px;background:var(--accent);display:block"></span><span style="width:1px;height:16px;background:var(--accent);display:block"></span><span style="width:2px;height:16px;background:var(--accent);display:block"></span></div></div>
+            <div><div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:3px" data-i18n="k78">Escanee con la cámara</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k79">Agregue productos y haga inventario escaneando el código de barras.</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:42px;height:42px;border-radius:11px;background:color-mix(in srgb,var(--red) 15%,transparent);border:1px solid color-mix(in srgb,var(--red) 28%,transparent);flex:none;display:flex;align-items:center;justify-content:center"><span style="width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px color-mix(in srgb,var(--red) 22%,transparent)"></span></div>
+            <div><div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:3px" data-i18n="k80">Alertas en el bolsillo</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k81">Reciba un aviso en cuanto un producto baja de su mínimo.</div></div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start">
+            <div style="width:42px;height:42px;border-radius:11px;background:color-mix(in srgb,var(--accent) 16%,transparent);border:1px solid var(--line);flex:none;display:flex;align-items:flex-end;justify-content:center;gap:3px;padding:9px 0"><span style="width:4px;height:9px;background:var(--accent);border-radius:1px;opacity:.5"></span><span style="width:4px;height:15px;background:var(--accent);border-radius:1px;opacity:.75"></span><span style="width:4px;height:12px;background:var(--accent);border-radius:1px"></span></div>
+            <div><div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:3px" data-i18n="k82">Reportes en tiempo real</div><div style="font-size:14px;line-height:1.5;color:var(--muted)" data-i18n="k83">Mire cómo va su día y qué se vende, desde cualquier lugar.</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <div style="width:280px;height:572px;background:var(--panel);border:1px solid var(--line);border-radius:42px;padding:12px;box-shadow:0 40px 80px -34px rgba(15,20,38,.55);position:relative">
+          <div style="position:absolute;top:22px;left:50%;transform:translateX(-50%);width:104px;height:26px;background:var(--bg);border-radius:0 0 14px 14px;z-index:2"></div>
+          <div style="height:100%;background:var(--bg);border-radius:32px;overflow:hidden;display:flex;flex-direction:column">
+            <div style="padding:30px 18px 14px;display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:11px;color:var(--muted);font-weight:600" data-i18n="k144">Hola,</div><div style="font-size:16px;font-weight:700;color:var(--ink)" data-i18n="k84">Mi tienda</div></div><div style="width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--accent) 18%,transparent);border:1px solid var(--line)"></div></div>
+            <div style="padding:4px 18px;display:flex;gap:9px">
+              <div style="flex:1;background:color-mix(in srgb,var(--accent) 13%,transparent);border:1px solid var(--line);border-radius:13px;padding:12px"><div style="font-size:10px;color:var(--muted);font-weight:600" data-i18n="k12">Productos</div><div style="font-size:19px;font-weight:700;color:var(--ink)">128</div></div>
+              <div style="flex:1;background:color-mix(in srgb,var(--red) 14%,transparent);border:1px solid color-mix(in srgb,var(--red) 26%,transparent);border-radius:13px;padding:12px"><div style="font-size:10px;color:var(--red);font-weight:600" data-i18n="k13">Bajo stock</div><div style="font-size:19px;font-weight:700;color:var(--red)">5</div></div>
+            </div>
+            <div style="padding:12px 18px 6px;font-size:11px;font-weight:700;color:var(--muted)" data-i18n="k68">Para reabastecer</div>
+            <div style="padding:0 18px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 12px"><span style="font-size:12px;font-weight:600;color:var(--ink)" data-i18n="k20">Bolsas kraft</span><span style="font-size:10px;font-weight:700;color:#fff;background:var(--red);padding:3px 8px;border-radius:999px" data-i18n="k145">Reponer</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 12px"><span style="font-size:12px;font-weight:600;color:var(--ink)" data-i18n="k71">Té verde</span><span style="font-size:10px;font-weight:700;color:var(--red);background:color-mix(in srgb,var(--red) 15%,transparent);padding:3px 8px;border-radius:999px" data-i18n="k146">Bajo</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 12px"><span style="font-size:12px;font-weight:600;color:var(--ink)" data-i18n="k38">Café molido</span><span style="font-size:10px;font-weight:700;color:var(--green);background:color-mix(in srgb,var(--green) 16%,transparent);padding:3px 8px;border-radius:999px">OK · 24</span></div>
+            </div>
+            <div style="margin-top:auto;padding:14px 18px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--line)">
+              <div style="flex:1;display:flex;align-items:center;gap:8px;background:var(--accent);border-radius:12px;padding:11px 14px;justify-content:center"><div style="display:flex;gap:2px;align-items:center"><span style="width:2px;height:13px;background:#fff;display:block"></span><span style="width:1px;height:13px;background:#fff;display:block"></span><span style="width:3px;height:13px;background:#fff;display:block"></span><span style="width:1px;height:13px;background:#fff;display:block"></span><span style="width:2px;height:13px;background:#fff;display:block"></span></div><span style="font-size:13px;font-weight:700;color:#fff" data-i18n="k85">Escanear</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="precios">
+    <div style="max-width:1180px;margin:0 auto;padding:64px 32px">
+      <div style="text-align:center;margin-bottom:40px"><div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase" data-i18n="k2">Precios</div><h2 style="font-size:34px;font-weight:700;letter-spacing:-.02em;margin:8px 0 8px;color:var(--ink)" data-i18n="k86">Una vez. Suyo para siempre.</h2><p style="font-size:16px;color:var(--muted);margin:0" data-i18n="k87">Sin mensualidades, nunca. Pruebe gratis y pásese a la licencia cuando quiera.</p></div>
+      <div class="price-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;align-items:stretch;max-width:760px;margin:0 auto">
+        <div class="card-lift" style="background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:30px;display:flex;flex-direction:column">
+          <div style="font-size:15px;font-weight:700;color:var(--ink)" data-i18n="k88">Básico</div>
+          <div style="display:flex;align-items:flex-end;gap:5px;margin:14px 0 4px"><span style="font-size:42px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace">$0</span><span style="font-size:14px;color:var(--muted);margin-bottom:9px" data-i18n="k89">para siempre</span></div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:22px" data-i18n="k90">Lo esencial para empezar a ordenar su stock.</div>
+          <div style="display:flex;flex-direction:column;gap:11px;margin-bottom:26px;font-size:14px;color:var(--ink)">
+            <div style="display:flex;gap:9px" data-i18n="k91"><span style="color:var(--green);font-weight:800">✓</span>Hasta 50 productos</div>
+            <div style="display:flex;gap:9px" data-i18n="k92"><span style="color:var(--green);font-weight:800">✓</span>Alertas de stock bajo</div>
+            <div style="display:flex;gap:9px" data-i18n="k93"><span style="color:var(--green);font-weight:800">✓</span>Panel y gráficos básicos</div>
+            <div style="display:flex;gap:9px" data-i18n="k94"><span style="color:var(--green);font-weight:800">✓</span>1 usuario</div>
+          </div>
+          <span class="btn-outline" onclick="goApp()" style="margin-top:auto;text-align:center;font-size:15px;font-weight:700;color:var(--ink);border:1px solid var(--line);padding:14px;border-radius:11px;cursor:pointer" data-i18n="k95">Empezar gratis</span>
+        </div>
+        <div class="card-lift" style="background:var(--panel);border:2px solid var(--accent);border-radius:18px;padding:30px;display:flex;flex-direction:column;position:relative;box-shadow:0 26px 50px -30px color-mix(in srgb,var(--accent) 55%,transparent)">
+          <span style="position:absolute;top:-12px;left:30px;font-size:11px;font-weight:700;color:var(--btn);background:var(--accent);padding:4px 11px;border-radius:999px" data-i18n="k96">Recomendado</span>
+          <div style="font-size:15px;font-weight:700;color:var(--ink)" data-i18n="k97">Licencia completa</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;margin:14px 0 4px"><span style="font-size:42px;font-weight:700;color:var(--ink);font-family:'IBM Plex Mono',monospace">$19.900</span><span style="font-size:14px;color:var(--muted);margin-bottom:9px" data-i18n="k98">pago único</span></div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:22px" data-i18n="k99">Todas las funciones, sin límites molestos.</div>
+          <div style="display:flex;flex-direction:column;gap:11px;margin-bottom:26px;font-size:14px;color:var(--ink)">
+            <div style="display:flex;gap:9px" data-i18n="k100"><span style="color:var(--green);font-weight:800">✓</span>Miles de productos</div>
+            <div style="display:flex;gap:9px" data-i18n="k101"><span style="color:var(--green);font-weight:800">✓</span>Caja con escáner de código de barras</div>
+            <div style="display:flex;gap:9px" data-i18n="k102"><span style="color:var(--green);font-weight:800">✓</span>Alertas inteligentes y reportes</div>
+            <div style="display:flex;gap:9px" data-i18n="k103"><span style="color:var(--green);font-weight:800">✓</span>Exportación a Excel y Google Sheets</div>
+            <div style="display:flex;gap:9px" data-i18n="k104"><span style="color:var(--green);font-weight:800">✓</span>Móvil y computadora, sincronizados</div>
+            <div style="display:flex;gap:9px" data-i18n="k105"><span style="color:var(--green);font-weight:800">✓</span>Todas las funciones, para siempre</div>
+          </div>
+          <span class="btn-accent" onclick="goApp()" style="margin-top:auto;text-align:center;font-size:15px;font-weight:700;color:var(--btn);background:var(--accent);padding:14px;border-radius:11px;cursor:pointer" data-i18n="k106">Obtener la licencia</span>
+        </div>
+      </div>
+      <div style="max-width:760px;margin:20px auto 0;background:color-mix(in srgb,var(--green) 12%,transparent);border:1px solid color-mix(in srgb,var(--green) 35%,transparent);border-radius:14px;padding:16px 22px;display:flex;align-items:center;gap:13px;font-size:14px;color:var(--ink)">
+        <span style="font-size:20px">🔄</span>
+        <div><b data-i18n="k107">Aunque pague una sola vez, no lo dejamos solo.</b> <span data-i18n="k108">Mejoramos la app constantemente y todas las actualizaciones llegan gratis a su licencia — para siempre.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" style="background:var(--sectionAlt);border-top:1px solid var(--line)">
+    <div style="max-width:780px;margin:0 auto;padding:60px 32px">
+      <div style="text-align:center;margin-bottom:34px"><div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase" data-i18n="k115">Preguntas frecuentes</div><h2 style="font-size:32px;font-weight:700;letter-spacing:-.02em;margin:8px 0 0;color:var(--ink)" data-i18n="k116">Lo que sueles preguntar</h2></div>
+      <div id="faqList" style="display:flex;flex-direction:column;gap:12px"></div>
+    </div>
+  </section>
+
+  <section id="contacto">
+    <div style="max-width:1180px;margin:0 auto;padding:64px 32px">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:40px;display:grid;grid-template-columns:1.3fr 1fr;gap:40px;align-items:center;box-shadow:0 26px 50px -36px rgba(15,20,38,.5)" class="disc-grid">
+        <div>
+          <div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--accent);text-transform:uppercase;margin-bottom:12px" data-i18n="k109">A su medida</div>
+          <h2 style="font-size:30px;line-height:1.12;font-weight:700;letter-spacing:-.02em;margin:0 0 14px;color:var(--ink)" data-i18n="k110">¿Necesitas algo especial? Lo adaptamos a ti</h2>
+          <p style="font-size:16px;line-height:1.6;color:var(--muted);margin:0 0 18px;max-width:460px" data-i18n="k111">Por ahora, stock está disponible en tres idiomas: español, inglés y francés. Si su negocio funciona en otro idioma, nos adaptamos a usted: escríbanos y lo conversamos.</p>
+          <div style="font-size:14px;line-height:1.6;color:var(--muted);background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:14px 16px;max-width:460px" data-i18n="k112">Hacemos trabajos a medida (otros idiomas, funciones específicas) con un costo según el pedido. Usted nos cuenta, nosotros le decimos cómo.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <a href="#" class="btn-accent" style="text-align:center;font-size:15px;font-weight:700;color:var(--btn);background:var(--accent);padding:15px;border-radius:12px;cursor:pointer" data-i18n="k113">Escríbanos</a>
+          <div style="text-align:center;font-size:13px;color:var(--muted)" data-i18n="k114">Le respondemos en español</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:var(--accent)">
+    <div style="max-width:1180px;margin:0 auto;padding:60px 32px;text-align:center">
+      <h2 style="font-size:36px;font-weight:700;letter-spacing:-.02em;margin:0 0 12px;color:#fff" data-i18n="k117">Empiece a controlar su inventario hoy</h2>
+      <p style="font-size:17px;color:rgba(255,255,255,.85);margin:0 0 26px" data-i18n="k118">Únase a los comercios que dejaron las hojas de cálculo atrás.</p>
+      <div style="display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap"><span class="btn-accent" onclick="goApp()" style="font-size:16px;font-weight:700;color:var(--accent);background:#fff;padding:15px 28px;border-radius:12px;cursor:pointer" data-i18n="k6">Comenzar gratis</span><span style="font-size:14px;color:rgba(255,255,255,.85)" data-i18n="k119">Gratis para empezar · sin tarjeta bancaria</span></div>
+    </div>
+  </section>
+
+  <footer style="background:var(--sectionAlt);border-top:1px solid var(--line)">
+    <div style="max-width:1180px;margin:0 auto;padding:48px 32px 28px">
+      <div class="foot-grid" style="display:grid;grid-template-columns:1.8fr 1fr 1fr;gap:40px;margin-bottom:34px">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(160deg,#5b86e8,#2f5fd0);display:flex;align-items:center;justify-content:center"><span style="font-family:'Sora',sans-serif;font-size:19px;font-weight:700;color:#fff;line-height:1">α</span></div><div style="font-size:19px;font-weight:700;color:var(--ink);white-space:nowrap">stock</div></div>
+          <div style="font-size:13px;line-height:1.6;color:var(--muted);max-width:240px" data-i18n="k120">Software de inventario simple para su comercio. Controle su stock y reciba alertas, sin complicaciones.</div>
+        </div>
+        <div><div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px" data-i18n="k121">Producto</div><div style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--muted)"><a href="#funciones" class="hov-accent" style="cursor:pointer" data-i18n="k1">Funciones</a><a href="#precios" class="hov-accent" style="cursor:pointer" data-i18n="k2">Precios</a><a href="#como" class="hov-accent" style="cursor:pointer" data-i18n="k3">Cómo funciona</a></div></div>
+        <div><div style="font-size:13px;font-weight:700;color:var(--ink);margin-bottom:12px" data-i18n="k126">Legal</div><div style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--muted)"><a href="#" class="hov-accent" style="cursor:pointer" data-i18n="k127">Términos</a><a href="privacy.html" class="hov-accent" style="cursor:pointer" data-i18n="k128">Privacidad</a></div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:22px;border-top:1px solid var(--line);flex-wrap:wrap;gap:12px"><span style="font-size:13px;color:var(--muted)">© 2026 stock · <span data-i18n="k129">Diseñado en Suiza, hecho para Chile</span> 🇨🇭🇨🇱</span><div style="display:flex;background:var(--panel);border-radius:999px;padding:3px;border:1px solid var(--line)"><span onclick="setLang('es')" data-lang-btn="es" style="font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer">ES</span><span onclick="setLang('en')" data-lang-btn="en" style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;cursor:pointer">EN</span><span onclick="setLang('fr')" data-lang-btn="fr" style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;cursor:pointer">FR</span></div></div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+function goApp(){ window.location.href='soon.html'; }
+
+const I18N={"k0": {"es": "Nuevo · Alertas automáticas de stock bajo, ya disponibles", "en": "New · Automatic low-stock alerts, now available", "fr": "Nouveau · Alertes automatiques de stock bas, disponibles"}, "k1": {"es": "Funciones", "en": "Features", "fr": "Fonctions"}, "k2": {"es": "Precios", "en": "Pricing", "fr": "Prix"}, "k3": {"es": "Cómo funciona", "en": "How it works", "fr": "Comment ça marche"}, "k4": {"es": "Contacto", "en": "Contact", "fr": "Contact"}, "k5": {"es": "Iniciar sesión", "en": "Log in", "fr": "Se connecter"}, "k6": {"es": "Comenzar gratis", "en": "Start free", "fr": "Commencer gratuitement"}, "k7": {"es": "Control de stock en tiempo real", "en": "Real-time stock control", "fr": "Contrôle du stock en temps réel"}, "k8": {"es": "La herramienta simple y profesional para gestionar su stock, recibir alertas y tomar mejores decisiones. Sin hojas de cálculo interminables.", "en": "The simple, professional tool to manage your stock, get alerts and make better decisions. No more endless spreadsheets.", "fr": "L'outil simple et professionnel pour gérer votre stock, recevoir des alertes et mieux décider. Fini les tableurs interminables."}, "k9": {"es": "Ver demo", "en": "See demo", "fr": "Voir la démo"}, "k10": {"es": "14 días de prueba gratis — sin tarjeta bancaria", "en": "14-day free trial — no credit card", "fr": "14 jours d'essai gratuit — sans carte bancaire"}, "k11": {"es": "Panel · Inventario", "en": "Dashboard · Inventory", "fr": "Tableau de bord · Inventaire"}, "k12": {"es": "Productos", "en": "Products", "fr": "Produits"}, "k13": {"es": "Bajo stock", "en": "Low stock", "fr": "Stock bas"}, "k14": {"es": "Movimiento hoy", "en": "Today's movement", "fr": "Mouvement du jour"}, "k15": {"es": "Movimiento · 7 días", "en": "Movement · 7 days", "fr": "Mouvement · 7 jours"}, "k16": {"es": "Entradas", "en": "Inflow", "fr": "Entrées"}, "k17": {"es": "Ventas", "en": "Sales", "fr": "Ventes"}, "k18": {"es": "Café molido 250g", "en": "Ground coffee 250g", "fr": "Café moulu 250g"}, "k19": {"es": "En stock · 24", "en": "In stock · 24", "fr": "En stock · 24"}, "k20": {"es": "Bolsas kraft", "en": "Kraft bags", "fr": "Sacs kraft"}, "k21": {"es": "Reabastecer · 2", "en": "Restock · 2", "fr": "Réappro · 2"}, "k22": {"es": "Hecho para su comercio", "en": "Made for your business", "fr": "Fait pour votre commerce"}, "k23": {"es": "Sí, stock es para su negocio", "en": "Yes, stock is for your business", "fr": "Oui, stock est fait pour votre commerce"}, "k24": {"es": "Da igual lo que venda: si tiene productos que entran y salen, stock le ordena el inventario.", "en": "Whatever you sell: if you have products coming in and out, stock keeps your inventory in order.", "fr": "Peu importe ce que vous vendez : si vous avez des produits qui entrent et sortent, stock organise votre inventaire."}, "k25": {"es": "Almacén", "en": "Grocery", "fr": "Épicerie"}, "k26": {"es": "Panadería", "en": "Bakery", "fr": "Boulangerie"}, "k27": {"es": "Ferretería", "en": "Hardware", "fr": "Bricolage"}, "k28": {"es": "Minimarket", "en": "Minimarket", "fr": "Supérette"}, "k29": {"es": "Botillería", "en": "Liquor store", "fr": "Cave à boissons"}, "k30": {"es": "Ropa y tienda", "en": "Clothing & shop", "fr": "Vêtements & boutique"}, "k31": {"es": "En tiempo real", "en": "Real time", "fr": "Temps réel"}, "k32": {"es": "Cada venta descuenta el stock, sola", "en": "Every sale updates stock, on its own", "fr": "Chaque vente met le stock à jour, automatiquement"}, "k33": {"es": "Registra una venta y el inventario se actualiza al instante. Sin restar a mano, sin sorpresas a fin de mes.", "en": "Record a sale and inventory updates instantly. No manual subtraction, no end-of-month surprises.", "fr": "Vous enregistrez une vente et l'inventaire se met à jour à l'instant. Sans soustraire à la main, sans surprise en fin de mois."}, "k34": {"es": "Inventario siempre al día, minuto a minuto", "en": "Inventory always up to date, minute by minute", "fr": "Inventaire toujours à jour, minute par minute"}, "k35": {"es": "Cada entrada de mercadería se registra al toque", "en": "Every stock delivery logged in one tap", "fr": "Chaque entrée de marchandise enregistrée en un geste"}, "k36": {"es": "Le avisa cuando algo baja de su mínimo", "en": "It warns you when something drops below its minimum", "fr": "Il vous prévient quand un produit passe sous son minimum"}, "k37": {"es": "Venta registrada", "en": "Sale recorded", "fr": "Vente enregistrée"}, "k38": {"es": "Café molido", "en": "Ground coffee", "fr": "Café moulu"}, "k39": {"es": "Total", "en": "Total", "fr": "Total"}, "k40": {"es": "unidades", "en": "units", "fr": "unités"}, "k41": {"es": "Mínimo: 10 unidades", "en": "Minimum: 10 units", "fr": "Minimum : 10 unités"}, "k42": {"es": "Cómo funciona", "en": "How it works", "fr": "Comment ça marche"}, "k43": {"es": "Listo en tres pasos", "en": "Ready in three steps", "fr": "Prêt en trois étapes"}, "k44": {"es": "Agregue sus productos", "en": "Add your products", "fr": "Ajoutez vos produits"}, "k45": {"es": "Escanee el código de barras y el nombre y la cantidad se llenan solos. O impórtelos desde Excel. Sin perder tiempo.", "en": "Scan the barcode and name and quantity fill in by themselves. Or import from Excel. No time wasted.", "fr": "Scannez le code-barres et le nom et la quantité se remplissent seuls. Ou importez-les depuis Excel. Sans perdre de temps."}, "k46": {"es": "Reciba alertas", "en": "Get alerts", "fr": "Recevez des alertes"}, "k47": {"es": "Le avisamos antes de quedarse sin stock, para que nunca pierda una venta.", "en": "We warn you before you run out, so you never lose a sale.", "fr": "On vous prévient avant la rupture, pour ne jamais perdre une vente."}, "k48": {"es": "Decida mejor", "en": "Decide better", "fr": "Décidez mieux"}, "k49": {"es": "Mire qué se vende y qué reponer de un vistazo.", "en": "See what sells and what to restock at a glance.", "fr": "Voyez ce qui se vend et quoi réapprovisionner d'un coup d'œil."}, "k50": {"es": "Funciones", "en": "Features", "fr": "Fonctions"}, "k51": {"es": "Simple de usar, desde el primer día", "en": "Simple to use, from day one", "fr": "Simple à prendre en main, dès le premier jour"}, "k52": {"es": "No necesitas saber de computación. stock hace el trabajo difícil por ti.", "en": "No computer skills needed. stock does the hard work for you.", "fr": "Pas besoin de t'y connaître en informatique. stock fait le travail difficile pour vous."}, "k53": {"es": "Todo a la vista", "en": "Everything in view", "fr": "Tout sous les yeux"}, "k54": {"es": "Vea lo que tiene y lo que se vende de un vistazo. Sin cálculos, sin complicaciones.", "en": "See what you have and what sells at a glance. No math, no hassle.", "fr": "Voyez ce que vous avez et ce qui se vend d'un coup d'œil. Sans calcul, sans complication."}, "k55": {"es": "Alertas inteligentes", "en": "Smart alerts", "fr": "Alertes en temps réel"}, "k56": {"es": "Sabe al instante qué productos debe reabastecer.", "en": "Know instantly which products to restock.", "fr": "Sachez à l'instant quels produits réapprovisionner."}, "k57": {"es": "Multiplataforma", "en": "Multi-platform", "fr": "Multiplateforme"}, "k58": {"es": "Úselo en su teléfono y en su computador, siempre sincronizado.", "en": "Use it on your phone and your computer, always synced.", "fr": "Utilisez-le sur votre téléphone et votre ordinateur, toujours synchronisé."}, "k59": {"es": "Importe y exporte", "en": "Import & export", "fr": "Importez & exportez"}, "k60": {"es": "Cargue su inventario desde Excel o Google Sheets — reconoce sus productos — y expórtelo cuando quiera.", "en": "Load your inventory from Excel or Google Sheets — it recognizes your products — and export it anytime.", "fr": "Chargez votre inventaire depuis Excel ou Google Sheets — il reconnaît vos produits — et exportez-le quand vous voulez."}, "k61": {"es": "Su panel", "en": "Your dashboard", "fr": "Votre tableau de bord"}, "k62": {"es": "Todo su negocio, en un solo panel", "en": "Your whole business, in one dashboard", "fr": "Toute votre activité, sur un seul tableau de bord"}, "k63": {"es": "Stock, movimiento y alertas en una sola vista. Rojo cuando hay que reponer, verde cuando todo va bien.", "en": "Stock, movement and alerts in one view. Red when you need to restock, green when all is fine.", "fr": "Stock, mouvement et alertes en une seule vue. Rouge quand il faut réapprovisionner, vert quand tout va bien."}, "k64": {"es": "Panel principal", "en": "Main dashboard", "fr": "Tableau principal"}, "k65": {"es": "7 días", "en": "7 days", "fr": "7 jours"}, "k66": {"es": "30 días", "en": "30 days", "fr": "30 jours"}, "k67": {"es": "Movimiento de inventario", "en": "Inventory movement", "fr": "Mouvement d'inventaire"}, "k68": {"es": "Para reabastecer", "en": "To restock", "fr": "À réapprovisionner"}, "k69": {"es": "Reponer ya", "en": "Restock now", "fr": "Réappro urgent"}, "k70": {"es": "Stock bajo", "en": "Low stock", "fr": "Stock bas"}, "k71": {"es": "Té verde", "en": "Green tea", "fr": "Thé vert"}, "k72": {"es": "Servilletas", "en": "Napkins", "fr": "Serviettes"}, "k73": {"es": "Todo lo demás", "en": "Everything else", "fr": "Tout le reste"}, "k74": {"es": "Al día", "en": "Up to date", "fr": "À jour"}, "k75": {"es": "En su bolsillo", "en": "In your pocket", "fr": "Dans votre poche"}, "k76": {"es": "Su negocio, también desde el teléfono", "en": "Your business, from your phone too", "fr": "Votre commerce vous suit, aussi sur le téléphone"}, "k77": {"es": "Controle su stock desde el mostrador o donde esté. Cada venta descuenta inventario al instante.", "en": "Manage your stock from the counter or anywhere. Every sale updates inventory instantly.", "fr": "Gérez votre stock depuis le comptoir ou n'importe où. Chaque vente déduit l'inventaire à l'instant."}, "k78": {"es": "Escanee con la cámara", "en": "Scan with the camera", "fr": "Scannez avec la caméra"}, "k79": {"es": "Agregue productos y haga inventario escaneando el código de barras.", "en": "Add products and do inventory by scanning the barcode.", "fr": "Ajoutez des produits et faites l'inventaire en scannant le code-barres."}, "k80": {"es": "Alertas en el bolsillo", "en": "Alerts in your pocket", "fr": "Alertes dans votre poche"}, "k81": {"es": "Reciba un aviso en cuanto un producto baja de su mínimo.", "en": "Get a notice as soon as a product drops below its minimum.", "fr": "Recevez un avis dès qu'un produit passe sous son minimum."}, "k82": {"es": "Reportes en tiempo real", "en": "Real-time reports", "fr": "Rapports en temps réel"}, "k83": {"es": "Mire cómo va su día y qué se vende, desde cualquier lugar.", "en": "See how your day is going and what sells, from anywhere.", "fr": "Voyez comment se passe votre journée et ce qui se vend, de n'importe où."}, "k84": {"es": "Mi tienda", "en": "My shop", "fr": "Ma boutique"}, "k85": {"es": "Escanear", "en": "Scan", "fr": "Scanner"}, "k86": {"es": "Una vez. Suyo para siempre.", "en": "Once. Yours forever.", "fr": "Une fois. À vous pour toujours."}, "k87": {"es": "Sin mensualidades, nunca. Pruebe gratis y pásese a la licencia cuando quiera.", "en": "No monthly fees, ever. Try it free and move to the license whenever you want.", "fr": "Aucun abonnement, jamais. Essayez gratuitement et passez à la licence quand vous voulez."}, "k88": {"es": "Básico", "en": "Basic", "fr": "Basique"}, "k89": {"es": "para siempre", "en": "forever", "fr": "pour toujours"}, "k90": {"es": "Lo esencial para empezar a ordenar su stock.", "en": "The essentials to start organizing your stock.", "fr": "L'essentiel pour commencer à organiser votre stock."}, "k91": {"es": "Hasta 50 productos", "en": "Up to 50 products", "fr": "Jusqu'à 50 produits"}, "k92": {"es": "Alertas de stock bajo", "en": "Low-stock alerts", "fr": "Alertes de stock bas"}, "k93": {"es": "Panel y gráficos básicos", "en": "Basic dashboard and charts", "fr": "Tableau et graphiques de base"}, "k94": {"es": "1 usuario", "en": "1 user", "fr": "1 utilisateur"}, "k95": {"es": "Empezar gratis", "en": "Start free", "fr": "Commencer gratuitement"}, "k96": {"es": "Recomendado", "en": "Recommended", "fr": "Recommandé"}, "k97": {"es": "Licencia completa", "en": "Full license", "fr": "Licence complète"}, "k98": {"es": "pago único", "en": "one-time payment", "fr": "paiement unique"}, "k99": {"es": "Todas las funciones, sin límites molestos.", "en": "All features, no annoying limits.", "fr": "Toutes les fonctions, sans limites pénibles."}, "k100": {"es": "Miles de productos", "en": "Thousands of products", "fr": "Des milliers de produits"}, "k101": {"es": "Caja con escáner de código de barras", "en": "Checkout with barcode scanner", "fr": "Caisse avec scanner de code-barres"}, "k102": {"es": "Alertas inteligentes y reportes", "en": "Smart alerts and reports", "fr": "Alertes en temps réel et rapports"}, "k103": {"es": "Exportación a Excel y Google Sheets", "en": "Export to Excel and Google Sheets", "fr": "Export vers Excel et Google Sheets"}, "k104": {"es": "Móvil y computadora, sincronizados", "en": "Phone and computer, synced", "fr": "Téléphone et ordinateur, synchronisés"}, "k105": {"es": "Todas las funciones, para siempre", "en": "All features, forever", "fr": "Toutes les fonctions, pour toujours"}, "k106": {"es": "Obtener la licencia", "en": "Get the license", "fr": "Obtenir la licence"}, "k107": {"es": "Aunque pague una sola vez, no lo dejamos solo.", "en": "Even though you pay once, we don’t leave you on your own.", "fr": "Même si vous ne payez qu’une seule fois, nous ne vous laissons pas tomber."}, "k108": {"es": "Mejoramos la app constantemente y todas las actualizaciones llegan gratis a su licencia — para siempre.", "en": "We improve the app constantly and every update reaches your license for free — forever.", "fr": "Nous améliorons l’application en continu et toutes les mises à jour arrivent gratuitement sur votre licence — pour toujours."}, "k109": {"es": "A su medida", "en": "Tailored to you", "fr": "Sur mesure"}, "k110": {"es": "¿Necesitas algo especial? Lo adaptamos a ti", "en": "Need something special? We adapt it to you", "fr": "Besoin de quelque chose de spécial ? On l'adapte à vous"}, "k111": {"es": "Por ahora, stock está disponible en tres idiomas: español, inglés y francés. Si su negocio funciona en otro idioma, nos adaptamos a usted: escríbanos y lo conversamos.", "en": "For now, stock is available in three languages: Spanish, English and French. If your business runs in another language, we adapt to you — write to us and let’s talk.", "fr": "Pour l’instant, stock est disponible en trois langues : espagnol, anglais et français. Si votre commerce fonctionne dans une autre langue, nous nous adaptons à vous : écrivez-nous et nous en parlerons."}, "k112": {"es": "Hacemos trabajos a medida (otros idiomas, funciones específicas) con un costo según el pedido. Usted nos cuenta, nosotros le decimos cómo.", "en": "We do custom work (other languages, specific features) at a cost based on the request. You tell us, we tell you how.", "fr": "On fait du sur-mesure (autres langues, fonctions spécifiques) à un coût selon la demande. Vous nous expliquez, nous vous disons comment."}, "k113": {"es": "Escríbanos", "en": "Write to us", "fr": "Écrivez-nous"}, "k114": {"es": "Le respondemos en español", "en": "We reply in your language", "fr": "On vous répond dans votre langue"}, "k115": {"es": "Preguntas frecuentes", "en": "FAQ", "fr": "Questions fréquentes"}, "k116": {"es": "Lo que sueles preguntar", "en": "What you usually ask", "fr": "Ce que vous demandez souvent"}, "k117": {"es": "Empiece a controlar su inventario hoy", "en": "Start controlling your inventory today", "fr": "Commencez à maîtriser votre inventaire dès aujourd'hui"}, "k118": {"es": "Únase a los comercios que dejaron las hojas de cálculo atrás.", "en": "Join the businesses that left spreadsheets behind.", "fr": "Rejoignez les commerces qui ont laissé les tableurs derrière eux."}, "k119": {"es": "Gratis para empezar · sin tarjeta bancaria", "en": "Free to start · no credit card", "fr": "Gratuit pour commencer · sans carte bancaire"}, "k120": {"es": "Software de inventario simple para su comercio. Controle su stock y reciba alertas, sin complicaciones.", "en": "Simple inventory software for your business. Control your stock and get alerts, hassle-free.", "fr": "Logiciel d'inventaire simple pour votre commerce. Contrôlez votre stock et recevez des alertes, sans complications."}, "k121": {"es": "Producto", "en": "Product", "fr": "Produit"}, "k122": {"es": "Empresa", "en": "Company", "fr": "Entreprise"}, "k123": {"es": "Por completar", "en": "To complete", "fr": "À compléter"}, "k124": {"es": "Sobre nosotros", "en": "About us", "fr": "À propos"}, "k125": {"es": "Blog", "en": "Blog", "fr": "Blog"}, "k126": {"es": "Legal", "en": "Legal", "fr": "Légal"}, "k127": {"es": "Términos", "en": "Terms", "fr": "Conditions"}, "k128": {"es": "Privacidad", "en": "Privacy", "fr": "Confidentialité"}, "k129": {"es": "Diseñado en Suiza, hecho para Chile", "en": "Designed in Switzerland, made for Chile", "fr": "Conçu en Suisse, fait pour le Chili"}, "k130": {"es": "¿Necesito conocimientos técnicos?", "en": "Do I need technical skills?", "fr": "Faut-il des connaissances techniques ?"}, "k131": {"es": "No. Si sabes usar una hoja de cálculo, sabes usar stock α. Todo está pensado para ser claro desde el primer minuto.", "en": "No. If you can use a spreadsheet, you can use stock α. Everything is designed to be clear from the first minute.", "fr": "Non. Si vous savez utiliser un tableur, vous savez utiliser stock α. Tout est pensé pour être clair dès la première minute."}, "k132": {"es": "¿Funciona en el móvil?", "en": "Does it work on mobile?", "fr": "Ça marche sur mobile ?"}, "k133": {"es": "Sí. Úselo en el móvil cuando está en la tienda y en la computadora para los reportes. Todo se sincroniza al instante.", "en": "Yes. Use it on mobile when you're in the shop and on the computer for reports. Everything syncs instantly.", "fr": "Oui. Utilisez-le sur mobile quand vous êtes en boutique et sur l'ordinateur pour les rapports. Tout se synchronise à l'instant."}, "k134": {"es": "¿Puedo exportar mis datos?", "en": "Can I export my data?", "fr": "Puis-je exporter mes données ?"}, "k135": {"es": "Cuando quiera, a Excel o Google Sheets. Sus datos siempre son suyos, sin ataduras.", "en": "Anytime, to Excel or Google Sheets. Your data is always yours, no strings attached.", "fr": "Quand vous voulez, vers Excel ou Google Sheets. Vos données sont toujours à vous, sans contrainte."}, "k136": {"es": "Si pago la licencia, ¿es para siempre?", "en": "If I pay the license, is it forever?", "fr": "Si je paie la licence, c'est pour toujours ?"}, "k137": {"es": "Sí. Paga una sola vez y la licencia es suya de por vida, sin mensualidades. Y seguimos mejorando la app con actualizaciones gratis.", "en": "Yes. You pay once and the license is yours for life, no monthly fees. And we keep improving the app with free updates.", "fr": "Oui. Vous payez une seule fois et la licence est à vous à vie, sans abonnement. Et on continue d'améliorer l'app avec des mises à jour gratuites."}, "k138": {"es": "¿Funciona sin internet?", "en": "Does it work offline?", "fr": "Ça marche sans internet ?"}, "k139": {"es": "Puede seguir registrando movimientos aunque se caiga la conexión; al volver internet, todo se sincroniza solo.", "en": "You can keep recording movements even if the connection drops; when internet returns, everything syncs by itself.", "fr": "Vous pouvez continuer à enregistrer des mouvements même si la connexion tombe ; au retour d'internet, tout se synchronise seul."}, "k140": {"es": "¿Puedo usar un lector de código de barras?", "en": "Can I use a barcode scanner?", "fr": "Puis-je utiliser un lecteur de code-barres ?"}, "k141": {"es": "Sí. Use un lector USB en la computadora o la cámara de su celular para escanear el código de barras.", "en": "Yes. Use a USB scanner on the computer or your phone camera to scan the barcode.", "fr": "Oui. Utilisez un lecteur USB sur l'ordinateur ou la caméra de votre téléphone pour scanner le code-barres."}, "k142": {"es": "¿Puedo migrar desde mi Excel actual?", "en": "Can I migrate from my current Excel?", "fr": "Puis-je migrer depuis mon Excel actuel ?"}, "k143": {"es": "Claro. Importe su planilla y stock α reconoce sus productos por nombre y cantidad para que no empiece de cero.", "en": "Of course. Import your spreadsheet and stock α recognizes your products by name and quantity so you don't start from scratch.", "fr": "Bien sûr. Importez votre tableur et stock α reconnaît vos produits par nom et quantité pour ne pas repartir de zéro."}, "k144": {"es": "Hola,", "en": "Hi,", "fr": "Bonjour,"}, "k145": {"es": "Reponer", "en": "Restock", "fr": "Réappro"}, "k146": {"es": "Bajo", "en": "Low", "fr": "Bas"}};
+let curLang='es';
+I18N['h1a']={es:'Su inventario,',en:'Your inventory,',fr:'Votre inventaire,'};
+I18N['h1b']={es:'claro y bajo control.',en:'clear and under control.',fr:'clair et sous contrôle.'};
+I18N['badge1']={es:'Control de stock en tiempo real',en:'Real-time stock control',fr:'Contrôle du stock en temps réel'};
+const THEME_PREFIX={es:'Tema · ',en:'Theme · ',fr:'Thème · '};
+const THEME_LABEL={es:{slate:'Slate clair',jour:'Jour bleu'},en:{slate:'Dark',jour:'Light'},fr:{slate:'Sombre',jour:'Clair'}};
+function applyLang(lang){
+  curLang=lang;
+  document.documentElement.lang=lang;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k=el.getAttribute('data-i18n');
+    if(I18N[k] && I18N[k][lang]!=null){
+      // preserve a trailing arrow/emoji span if any child exists
+      if(el.children.length===0){ el.textContent=I18N[k][lang]; }
+      else {
+        // replace only the leading text node
+        let done=false;
+        el.childNodes.forEach(n=>{ if(!done && n.nodeType===3 && n.textContent.trim()){ n.textContent=I18N[k][lang]+' '; done=true; } });
+        if(!done) el.insertBefore(document.createTextNode(I18N[k][lang]+' '), el.firstChild);
+      }
+    }
+  });
+  // FAQ
+  if(typeof FAQ_ALL!=='undefined'){ FAQ=FAQ_ALL[lang]||FAQ_ALL.es; if(typeof renderFaq==='function') renderFaq(); }
+  // theme toggle label
+  const tn=document.getElementById('themeName');
+  if(tn){ const th=document.getElementById('page').getAttribute('data-theme'); 
+    const tt=document.querySelector('button[onclick="toggleTheme()"]');
+    tn.textContent=THEME_LABEL[lang][th]; }
+  const tp=document.getElementById('themePrefix'); if(tp){ tp.textContent=THEME_PREFIX[lang]; }
+  // lang button active states
+  document.querySelectorAll('[data-lang-btn]').forEach(b=>{
+    const on=b.getAttribute('data-lang-btn')===lang;
+    b.style.background=on?'var(--accent)':'transparent';
+    b.style.color=on?'var(--btn)':'var(--muted)';
+    b.style.fontWeight=on?'700':'600';
+  });
+  try{localStorage.setItem('sa_lang',lang);}catch(e){}
+}
+function setLang(lang){ applyLang(lang); }
+function detectLang(){
+  try{ const saved=localStorage.getItem('sa_lang'); if(saved) return saved; }catch(e){}
+  const n=(navigator.language||'es').slice(0,2).toLowerCase();
+  if(n==='en') return 'en';
+  if(n==='fr') return 'fr';
+  return 'es';
+}
+
+function toggleTheme(){
+  const p=document.getElementById('page');
+  const next=p.getAttribute('data-theme')==='slate'?'jour':'slate';
+  p.setAttribute('data-theme',next);
+  const tn=document.getElementById('themeName');
+  if(tn && typeof THEME_LABEL!=='undefined'){ tn.textContent=THEME_LABEL[curLang][next]; }
+  try{localStorage.setItem('sa_theme',next);}catch(e){}
+}
+try{const t=localStorage.getItem('sa_theme');if(t){document.getElementById('page').setAttribute('data-theme',t);document.getElementById('themeName').textContent=t==='slate'?'Slate clair':'Jour bleu';}}catch(e){}
+
+const FAQ_ALL={
+ es:[
+  ['¿Necesito conocimientos técnicos?','No. Si sabe usar una hoja de cálculo, sabe usar stock α. Todo está pensado para ser claro desde el primer minuto.'],
+  ['¿Funciona en el móvil?','Sí. Úselo en el móvil cuando está en la tienda y en la computadora para los reportes. Todo se sincroniza al instante.'],
+  ['¿Puedo exportar mis datos?','Cuando quiera, a Excel o Google Sheets. Sus datos siempre son suyos, sin ataduras.'],
+  ['Si pago la licencia, ¿es para siempre?','Sí. Paga una sola vez y la licencia es suya de por vida, sin mensualidades. Y seguimos mejorando la app con actualizaciones gratis.'],
+  ['¿Funciona sin internet?','Puede seguir registrando movimientos aunque se caiga la conexión; al volver internet, todo se sincroniza solo.'],
+  ['¿Puedo usar un lector de código de barras?','Sí. Use un lector USB en la computadora o la cámara de su celular para escanear el código de barras.'],
+  ['¿Puedo migrar desde mi Excel actual?','Claro. Importe su planilla y stock α reconoce sus productos por nombre y cantidad para que no empiece de cero.']
+ ],
+ en:[
+  ['Do I need technical skills?','No. If you can use a spreadsheet, you can use stock α. Everything is designed to be clear from the first minute.'],
+  ['Does it work on mobile?','Yes. Use it on mobile when you\u2019re in the shop and on the computer for reports. Everything syncs instantly.'],
+  ['Can I export my data?','Anytime, to Excel or Google Sheets. Your data is always yours, no strings attached.'],
+  ['If I pay the license, is it forever?','Yes. You pay once and the license is yours for life, no monthly fees. And we keep improving the app with free updates.'],
+  ['Does it work offline?','You can keep recording movements even if the connection drops; when internet returns, everything syncs by itself.'],
+  ['Can I use a barcode scanner?','Yes. Use a USB scanner on the computer or your phone camera to scan the barcode.'],
+  ['Can I migrate from my current Excel?','Of course. Import your spreadsheet and stock α recognizes your products by name and quantity so you don\u2019t start from scratch.']
+ ],
+ fr:[
+  ['Faut-il des connaissances techniques ?','Non. Si vous savez utiliser un tableur, vous savez utiliser stock α. Tout est pensé pour être clair dès la première minute.'],
+  ['Ça marche sur mobile ?','Oui. Utilisez-le sur mobile quand vous êtes en boutique et sur l\u2019ordinateur pour les rapports. Tout se synchronise à l\u2019instant.'],
+  ['Puis-je exporter mes données ?','Quand vous voulez, vers Excel ou Google Sheets. Vos données sont toujours à vous, sans contrainte.'],
+  ['Si je paie la licence, c\u2019est pour toujours ?','Oui. Vous payez une seule fois et la licence est à vous à vie, sans abonnement. Et nous continuons d\u2019améliorer l\u2019app avec des mises à jour gratuites.'],
+  ['Ça marche sans internet ?','Vous pouvez continuer à enregistrer des mouvements même si la connexion tombe ; au retour d\u2019internet, tout se synchronise seul.'],
+  ['Puis-je utiliser un lecteur de code-barres ?','Oui. Utilisez un lecteur USB sur l\u2019ordinateur ou la caméra de votre téléphone pour scanner le code-barres.'],
+  ['Puis-je migrer depuis mon Excel actuel ?','Bien sûr. Importez votre tableur et stock α reconnaît vos produits par nom et quantité pour ne pas repartir de zéro.']
+ ]
+};
+let FAQ=FAQ_ALL.es;
+let faqOpen=0;
+const faqList=document.getElementById('faqList');
+function renderFaq(){
+  faqList.innerHTML=FAQ.map((f,i)=>{
+    const open=i===faqOpen;
+    return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden">'+
+      '<div onclick="toggleFaq('+i+')" style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;cursor:pointer">'+
+        '<span style="font-size:16px;font-weight:600;color:var(--ink)">'+f[0]+'</span>'+
+        '<span style="font-size:24px;font-weight:300;color:var(--accent);line-height:1;flex:none;transition:transform .5s cubic-bezier(.25,.8,.25,1);transform:'+(open?'rotate(45deg)':'rotate(0deg)')+'">+</span>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-rows:'+(open?'1fr':'0fr')+';transition:grid-template-rows .55s cubic-bezier(.25,.8,.25,1)">'+
+        '<div style="overflow:hidden"><div style="padding:0 20px 18px;font-size:14px;line-height:1.6;color:var(--muted);opacity:'+(open?1:0)+';transition:opacity .45s ease .1s">'+f[1]+'</div></div>'+
+      '</div></div>';
+  }).join('');
+}
+function toggleFaq(i){ faqOpen=(faqOpen===i?-1:i); renderFaq(); }
+renderFaq();
+
+const reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+const page=document.getElementById('page');
+const fmt=n=>n.toLocaleString('es-CL');
+const counters=Array.from(page.querySelectorAll('[data-count]'));
+const bars=Array.from(page.querySelectorAll('[data-grow]'));
+const reveals=Array.from(page.querySelectorAll('section')).slice(1).map(s=>s.firstElementChild).filter(Boolean);
+if(!reduce){
+  counters.forEach(el=>el.textContent='0');
+  bars.forEach(el=>{
+    const sibs=Array.from(el.parentElement.children).filter(c=>c.hasAttribute('data-grow'));
+    const i=Math.max(0,sibs.indexOf(el));
+    el.style.opacity='0';el.style.transform='translateY(12px)';
+    el.style.transition='opacity .5s ease '+(i*60)+'ms, transform .55s cubic-bezier(.2,.7,.2,1) '+(i*60)+'ms';
+  });
+  reveals.forEach(el=>{el.style.opacity='0';el.style.transform='translateY(20px)';el.style.transition='opacity .8s cubic-bezier(.4,0,.2,1),transform .8s cubic-bezier(.4,0,.2,1)';});
+}else{
+  counters.forEach(el=>el.textContent=fmt(parseFloat(el.getAttribute('data-count'))||0));
+}
+function runCount(el){
+  const target=parseFloat(el.getAttribute('data-count'))||0,dur=1100,start=performance.now(),ease=t=>1-Math.pow(1-t,3);
+  function tick(now){const p=Math.min(1,(now-start)/dur);el.textContent=fmt(Math.round(target*ease(p)));if(p<1)requestAnimationFrame(tick);else el.textContent=fmt(target);}
+  requestAnimationFrame(tick);
+}
+if(!reduce){
+  const vh=()=>window.innerHeight||document.documentElement.clientHeight;
+  const inView=(el,f)=>{const r=el.getBoundingClientRect();return r.bottom>4&&r.top<vh()*f;};
+  const pR=new Set(reveals),pB=new Set(bars),pC=new Set(counters);
+  function check(){
+    pR.forEach(el=>{if(inView(el,.9)){el.style.opacity='1';el.style.transform='none';pR.delete(el);}});
+    pB.forEach(el=>{if(inView(el,.92)){el.style.opacity='1';el.style.transform='none';pB.delete(el);}});
+    pC.forEach(el=>{if(inView(el,.92)){runCount(el);pC.delete(el);}});
+    if(!pR.size&&!pB.size&&!pC.size){window.removeEventListener('scroll',onScroll);window.removeEventListener('resize',onScroll);}
+  }
+  let ticking=false;
+  function onScroll(){if(!ticking){ticking=true;requestAnimationFrame(()=>{ticking=false;check();});}}
+  window.addEventListener('scroll',onScroll,{passive:true});
+  window.addEventListener('resize',onScroll);
+  const poll=setInterval(()=>{check();if(!pR.size&&!pB.size&&!pC.size)clearInterval(poll);},140);
+  setTimeout(check,60);
+}
+applyLang(detectLang());
+</script>
+</body>
+</html>
